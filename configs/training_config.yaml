@@ -50,6 +50,11 @@ data_path: ""  # Will be set via command line or environment
 project_path: "runs/detect"
 name: "yolov11_drone_detection"
 
+# S3 Configuration
+s3_bucket: "lucaskle-ab3-project-pv"  # S3 bucket for dataset
+s3_data_prefix: "data/drone-detection/"  # S3 prefix for dataset
+aws_profile: "ab"  # AWS profile to use
+
 # MLFlow Parameters
 experiment_name: "yolov11-drone-detection"
 run_name: null  # Will be auto-generated if null

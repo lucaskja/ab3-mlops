@@ -1,0 +1,22 @@
+{
+  "enabled": true,
+  "name": "Code Structure Sync",
+  "description": "Automatically updates the .kiro/steering/structure.md file to reflect changes in the codebase structure and organization",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/**/*.py",
+      "configs/**/*.py",
+      "scripts/**/*.py",
+      "scripts/**/*.sh",
+      "notebooks/**/*.ipynb",
+      "tests/**/*.py",
+      "requirements.txt"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Code has been modified in the project. Please analyze the current project structure and update the .kiro/steering/structure.md file to accurately reflect any changes in:\n\n1. Directory organization and new/removed folders\n2. File naming conventions and patterns\n3. Module structure and dependencies\n4. Import patterns and code organization\n5. Development workflow changes\n6. Any new configuration files or scripts\n\nFocus on maintaining consistency with the existing MLOps SageMaker demo project structure while documenting any structural changes that have occurred."
+  }
+}

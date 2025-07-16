@@ -159,9 +159,11 @@ class TestYOLOv11Trainer(unittest.TestCase):
         self.assertIsNotNone(trainer.device)
     
     @patch('torch.cuda.is_available')
-    def test_device_setup_gpu(self, mock_cuda_available):
+    @patch('torch.cuda.get_device_name')
+    def test_device_setup_gpu(self, mock_get_device_name, mock_cuda_available):
         """Test device setup with GPU available"""
         mock_cuda_available.return_value = True
+        mock_get_device_name.return_value = "Mock GPU"
         
         trainer = YOLOv11Trainer(self.config)
         
@@ -270,7 +272,7 @@ class TestYOLOv11Trainer(unittest.TestCase):
         """Test evaluation metrics extraction"""
         trainer = YOLOv11Trainer(self.config)
         
-        # Mock results object
+        # Mock results object with both results_dict and box attributes
         mock_results = Mock()
         mock_results.results_dict = {
             'metrics/mAP50(B)': 0.85,
@@ -282,8 +284,17 @@ class TestYOLOv11Trainer(unittest.TestCase):
             'val/dfl_loss': 0.12
         }
         
+        # Mock box results for alternative path
+        mock_box = Mock()
+        mock_box.map50 = 0.85
+        mock_box.map = 0.72
+        mock_box.mp = 0.88
+        mock_box.mr = 0.82
+        mock_results.box = mock_box
+        
         metrics = trainer._extract_evaluation_metrics(mock_results)
         
+        # Should use results_dict values first
         self.assertEqual(metrics['map50'], 0.85)
         self.assertEqual(metrics['map50_95'], 0.72)
         self.assertEqual(metrics['precision'], 0.88)
@@ -366,19 +377,5 @@ class TestTrainingIntegration(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    # Create test suite
-    test_suite = unittest.TestSuite()
-    
-    # Add test cases
-    test_suite.addTest(unittest.makeSuite(TestTrainingConfig))
-    test_suite.addTest(unittest.makeSuite(TestConfigSaveLoad))
-    test_suite.addTest(unittest.makeSuite(TestYOLOv11Trainer))
-    test_suite.addTest(unittest.makeSuite(TestTrainingIntegration))
-    
-    # Run tests
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(test_suite)
-    
-    # Exit with appropriate code
-    exit_code = 0 if result.wasSuccessful() else 1
-    exit(exit_code)
+    # Run tests using unittest.main()
+    unittest.main(verbosity=2)

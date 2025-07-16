@@ -1,0 +1,40 @@
+{
+  "job_name": null,
+  "base_job_name": "yolov11-training",
+  "instance_type": "ml.g4dn.xlarge",
+  "instance_count": 1,
+  "volume_size": 30,
+  "max_run": 86400,
+  "training_data_s3_path": "s3://lucaskle-ab3-project-pv/data/plant-disease-detection/train/",
+  "validation_data_s3_path": "s3://lucaskle-ab3-project-pv/data/plant-disease-detection/val/",
+  "output_s3_path": "s3://lucaskle-ab3-project-pv/models/yolov11-training/20250716-141035/",
+  "hyperparameters": {
+    "model": "yolov11s",
+    "epochs": 50,
+    "batch-size": 8,
+    "learning-rate": 0.01,
+    "img-size": 640,
+    "num-classes": 39
+  },
+  "max_retry_attempts": 3,
+  "enable_profiler": false,
+  "enable_debugger": false,
+  "tags": [
+    {
+      "Key": "Project",
+      "Value": "mlops-sagemaker-demo"
+    },
+    {
+      "Key": "Environment",
+      "Value": "Development"
+    },
+    {
+      "Key": "Owner",
+      "Value": "MLOps-Team"
+    },
+    {
+      "Key": "CostCenter",
+      "Value": "Research-Development"
+    }
+  ]
+}

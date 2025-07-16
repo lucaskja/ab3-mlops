@@ -82,7 +82,7 @@ class S3DataAccess:
             else:
                 raise ValueError(f"Error accessing bucket '{self.bucket_name}': {str(e)}")
     
-    def list_objects(self, prefix: str = '', max_keys: int = 1000) -> List[Dict[str, Any]]:
+    def list_objects(self, prefix: str = '', max_keys: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         List objects in the S3 bucket with optional prefix filtering.
         
@@ -100,11 +100,19 @@ class S3DataAccess:
             objects = []
             paginator = self.s3_client.get_paginator('list_objects_v2')
             
-            page_iterator = paginator.paginate(
-                Bucket=self.bucket_name,
-                Prefix=prefix,
-                PaginationConfig={'MaxItems': max_keys}
-            )
+            # Configure pagination based on max_keys
+            if max_keys:
+                page_iterator = paginator.paginate(
+                    Bucket=self.bucket_name,
+                    Prefix=prefix,
+                    PaginationConfig={'MaxItems': max_keys}
+                )
+            else:
+                # No limit - get all objects
+                page_iterator = paginator.paginate(
+                    Bucket=self.bucket_name,
+                    Prefix=prefix
+                )
             
             for page in page_iterator:
                 if 'Contents' in page:

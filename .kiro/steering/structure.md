@@ -76,6 +76,18 @@
 - **Deployment**: Use provided shell scripts with `ab` profile
 - **Validation**: Run validation scripts after deployment
 
+## Command Execution Rules
+
+### Virtual Environment
+- **ALWAYS** activate and use the `venv` virtual environment for all Python commands
+- **ALWAYS** use `venv/bin/python` or `venv/bin/pip` for Python operations
+- **Never** run Python commands without the virtual environment activated
+
+### AWS Profile
+- **ALWAYS** use the AWS profile called `ab` for all AWS operations
+- **ALWAYS** set `AWS_PROFILE=ab` environment variable or use `--profile ab` flag
+- **Never** use default AWS profile or other profiles
+
 ### Data Processing
 - **S3 Access**: Use `S3DataAccess` class from `src.data.s3_utils`
 - **Validation**: Use `YOLOv11Validator` for format compliance

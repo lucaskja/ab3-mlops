@@ -16,8 +16,10 @@ import argparse
 import logging
 from pathlib import Path
 
-# Add src to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+# Add src and project root to path for imports
+project_root = os.path.join(os.path.dirname(__file__), '..', '..')
+sys.path.append(os.path.join(project_root, 'src'))
+sys.path.append(project_root)
 
 from models.yolov11_trainer import YOLOv11Trainer, TrainingConfig, load_training_config, save_training_config
 from configs.project_config import get_config
@@ -38,7 +40,10 @@ def parse_arguments():
     parser.add_argument('--config', type=str, help='Path to training configuration file')
     
     # Data parameters
-    parser.add_argument('--data', type=str, help='Path to dataset directory')
+    parser.add_argument('--data', type=str, help='Path to dataset directory (local or S3)')
+    parser.add_argument('--s3-bucket', type=str, help='S3 bucket name for dataset')
+    parser.add_argument('--s3-prefix', type=str, default='datasets/', help='S3 prefix for dataset')
+    parser.add_argument('--aws-profile', type=str, default='ab', help='AWS profile to use')
     parser.add_argument('--classes', nargs='+', default=['vehicle', 'person', 'building'],
                        help='Class names for the dataset')
     
@@ -85,6 +90,12 @@ def parse_arguments():
 def create_config_from_args(args) -> TrainingConfig:
     """Create TrainingConfig from command line arguments"""
     
+    # Get S3 bucket from args or project config
+    s3_bucket = args.s3_bucket
+    if not s3_bucket:
+        project_config = get_config()
+        s3_bucket = project_config.get('aws', {}).get('data_bucket')
+    
     config = TrainingConfig(
         model_variant=args.model,
         pretrained=args.pretrained,
@@ -99,6 +110,9 @@ def create_config_from_args(args) -> TrainingConfig:
         data_path=args.data or "",
         project_path=args.project,
         name=args.name,
+        s3_bucket=s3_bucket,
+        s3_data_prefix=args.s3_prefix,
+        aws_profile=args.aws_profile,
         experiment_name=args.experiment,
         run_name=args.run_name
     )
@@ -178,25 +192,33 @@ def main():
             save_training_config(config, args.save_config)
             logger.info(f"Configuration saved to {args.save_config}")
         
-        # Validate dataset
-        if config.data_path:
-            if not validate_dataset(config.data_path):
-                logger.error("Dataset validation failed")
-                return 1
-        else:
-            logger.error("No dataset path provided")
-            return 1
-        
         # Initialize trainer
         logger.info("Initializing YOLOv11 trainer")
         trainer = YOLOv11Trainer(config)
         
-        # Start training
-        logger.info("Starting model training")
-        results = trainer.train(
-            data_path=config.data_path,
-            resume_from=args.resume
-        )
+        # Determine training approach based on data source
+        if config.s3_bucket and not config.data_path:
+            # Train with S3 data
+            logger.info(f"Training with S3 data from bucket: {config.s3_bucket}")
+            results = trainer.train_with_s3_data(
+                s3_prefix=config.s3_data_prefix,
+                resume_from=args.resume,
+                cleanup_after=True
+            )
+        elif config.data_path:
+            # Train with local data
+            if not validate_dataset(config.data_path):
+                logger.error("Dataset validation failed")
+                return 1
+            
+            logger.info(f"Training with local data: {config.data_path}")
+            results = trainer.train(
+                data_path=config.data_path,
+                resume_from=args.resume
+            )
+        else:
+            logger.error("No dataset source provided. Use --data for local path or --s3-bucket for S3 data")
+            return 1
         
         logger.info("Training completed successfully!")
         logger.info(f"Results: {results}")

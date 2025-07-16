@@ -62,7 +62,7 @@ COST_ALLOCATION_TAGS = {
     "Project": PROJECT_NAME,
     "Environment": "Development",
     "Owner": "MLOps-Team",
-    "CostCenter": "R&D"
+    "CostCenter": "Research-Development"
 }
 
 # Notification Configuration

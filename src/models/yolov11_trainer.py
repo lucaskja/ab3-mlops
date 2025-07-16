@@ -14,6 +14,8 @@ import json
 import yaml
 import logging
 import time
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, asdict
@@ -29,6 +31,9 @@ from ultralytics.utils.metrics import DetMetrics
 from ultralytics.utils.plotting import plot_results
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+# Import S3 utilities
+from data.s3_utils import S3DataAccess
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -85,6 +90,11 @@ class TrainingConfig:
     project_path: str = "runs/detect"
     name: str = "yolov11_training"
     
+    # S3 Configuration
+    s3_bucket: Optional[str] = None
+    s3_data_prefix: str = "data/drone-detection/"
+    aws_profile: str = "ab"
+    
     # MLFlow parameters
     experiment_name: str = "yolov11-drone-detection"
     run_name: Optional[str] = None
@@ -121,7 +131,183 @@ class YOLOv11Trainer:
         # Initialize MLFlow
         self._setup_mlflow()
         
+        # Initialize S3 client if bucket is specified
+        self.s3_client = None
+        if config.s3_bucket:
+            try:
+                self.s3_client = S3DataAccess(
+                    bucket_name=config.s3_bucket,
+                    aws_profile=config.aws_profile
+                )
+                logger.info(f"S3 client initialized for bucket: {config.s3_bucket}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize S3 client: {str(e)}")
+        
         logger.info(f"YOLOv11Trainer initialized with config: {config.model_variant}")
+    
+    def download_data_from_s3(self, s3_prefix: Optional[str] = None, local_data_dir: Optional[str] = None) -> str:
+        """
+        Download training data from S3 bucket to local directory.
+        
+        Args:
+            s3_prefix: S3 prefix for dataset (defaults to config.s3_data_prefix)
+            local_data_dir: Local directory to download data to (defaults to temp directory)
+            
+        Returns:
+            Path to local data directory
+            
+        Raises:
+            RuntimeError: If S3 client is not initialized or download fails
+        """
+        if not self.s3_client:
+            raise RuntimeError("S3 client not initialized. Set s3_bucket in config.")
+        
+        s3_prefix = s3_prefix or self.config.s3_data_prefix
+        
+        # Create local data directory
+        if local_data_dir is None:
+            local_data_dir = os.path.join(tempfile.gettempdir(), f"yolo_data_{int(time.time())}")
+        
+        os.makedirs(local_data_dir, exist_ok=True)
+        logger.info(f"Downloading data from S3 prefix '{s3_prefix}' to '{local_data_dir}'")
+        
+        try:
+            # List all objects with the prefix
+            objects = self.s3_client.list_objects(prefix=s3_prefix)
+            
+            if not objects:
+                raise RuntimeError(f"No objects found with prefix '{s3_prefix}'")
+            
+            # Download each object
+            downloaded_count = 0
+            for obj in objects:
+                s3_key = obj['Key']
+                
+                # Create local file path maintaining S3 structure
+                relative_path = s3_key[len(s3_prefix):].lstrip('/')
+                local_file_path = os.path.join(local_data_dir, relative_path)
+                
+                # Create directory if needed
+                os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+                
+                # Download file
+                self.s3_client.download_file_to_local(s3_key, local_file_path)
+                downloaded_count += 1
+                
+                if downloaded_count % 100 == 0:
+                    logger.info(f"Downloaded {downloaded_count}/{len(objects)} files...")
+            
+            logger.info(f"Successfully downloaded {downloaded_count} files from S3")
+            return local_data_dir
+            
+        except Exception as e:
+            logger.error(f"Failed to download data from S3: {str(e)}")
+            raise RuntimeError(f"S3 data download failed: {str(e)}")
+    
+    def prepare_s3_dataset(self, s3_prefix: Optional[str] = None, local_data_dir: Optional[str] = None) -> str:
+        """
+        Download and prepare dataset from S3 for YOLOv11 training.
+        
+        Args:
+            s3_prefix: S3 prefix for dataset
+            local_data_dir: Local directory for data
+            
+        Returns:
+            Path to prepared dataset directory
+        """
+        logger.info("Preparing dataset from S3...")
+        
+        # Download data from S3
+        data_dir = self.download_data_from_s3(s3_prefix, local_data_dir)
+        
+        # Validate dataset structure
+        self._validate_dataset_structure(data_dir)
+        
+        # Create dataset configuration
+        dataset_config_path = self.prepare_dataset_config(data_dir)
+        
+        logger.info(f"Dataset prepared successfully at {data_dir}")
+        return data_dir
+    
+    def _validate_dataset_structure(self, data_dir: str) -> bool:
+        """
+        Validate that the dataset has the required YOLO structure.
+        
+        Args:
+            data_dir: Path to dataset directory
+            
+        Returns:
+            True if structure is valid
+            
+        Raises:
+            RuntimeError: If dataset structure is invalid
+        """
+        required_dirs = [
+            os.path.join(data_dir, 'train', 'images'),
+            os.path.join(data_dir, 'train', 'labels'),
+            os.path.join(data_dir, 'val', 'images'),
+            os.path.join(data_dir, 'val', 'labels')
+        ]
+        
+        missing_dirs = []
+        for req_dir in required_dirs:
+            if not os.path.exists(req_dir):
+                missing_dirs.append(req_dir)
+        
+        if missing_dirs:
+            raise RuntimeError(f"Missing required directories: {missing_dirs}")
+        
+        # Check if directories have files
+        for req_dir in required_dirs:
+            files = os.listdir(req_dir)
+            if not files:
+                logger.warning(f"Directory is empty: {req_dir}")
+        
+        logger.info("Dataset structure validation passed")
+        return True
+    
+    def train_with_s3_data(self, s3_prefix: Optional[str] = None, 
+                          local_data_dir: Optional[str] = None,
+                          resume_from: Optional[str] = None,
+                          cleanup_after: bool = True) -> Dict[str, Any]:
+        """
+        Train YOLOv11 model using data from S3.
+        
+        Args:
+            s3_prefix: S3 prefix for dataset
+            local_data_dir: Local directory for data (temp if None)
+            resume_from: Path to checkpoint to resume from
+            cleanup_after: Whether to cleanup downloaded data after training
+            
+        Returns:
+            Training results dictionary
+        """
+        logger.info("Starting training with S3 data...")
+        
+        # Prepare dataset from S3
+        data_dir = self.prepare_s3_dataset(s3_prefix, local_data_dir)
+        
+        try:
+            # Train model
+            results = self.train(data_path=data_dir, resume_from=resume_from)
+            
+            # Add S3 info to results
+            results['s3_data_source'] = {
+                'bucket': self.config.s3_bucket,
+                'prefix': s3_prefix or self.config.s3_data_prefix,
+                'local_data_dir': data_dir
+            }
+            
+            return results
+            
+        finally:
+            # Cleanup downloaded data if requested
+            if cleanup_after and local_data_dir is None:  # Only cleanup temp directories
+                try:
+                    shutil.rmtree(data_dir)
+                    logger.info(f"Cleaned up temporary data directory: {data_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup data directory: {str(e)}")
     
     def _setup_device(self) -> str:
         """Setup training device (CPU/GPU)"""

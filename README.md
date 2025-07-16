@@ -46,9 +46,11 @@ The project implements a complete MLOps architecture with clear separation of co
 │   │   ├── data_validator.py # YOLOv11 format validation
 │   │   └── yolo_preprocessor.py # YOLOv11 preprocessing pipeline
 │   ├── models/               # Model implementation modules
+│   │   └── yolov11_trainer.py # YOLOv11 training implementation
 │   └── pipeline/             # Pipeline orchestration modules
 └── tests/                    # Unit tests
-    └── test_yolo_preprocessor.py # Comprehensive preprocessing tests
+    ├── test_yolo_preprocessor.py # Comprehensive preprocessing tests
+    └── test_yolov11_trainer.py   # YOLOv11 trainer unit tests
 ```
 
 ## 🚀 Quick Start
