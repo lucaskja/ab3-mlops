@@ -21,7 +21,7 @@
   - Write utility functions for S3 data access with proper error handling
   - _Requirements: 1.1, 1.2, 1.3_
 
-- [ ] 4. Implement YOLOv11 training infrastructure
+- [-] 4. Implement YOLOv11 training infrastructure
 - [x] 4.1 Create YOLOv11 data preprocessing pipeline
   - Write data preprocessing functions to convert drone imagery to YOLOv11 format
   - Implement data augmentation pipeline for training data enhancement
