@@ -1,0 +1,305 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IAM Roles and Policies for MLOps SageMaker Demo - Governance and Role Separation'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'mlops-sagemaker-demo'
+    Description: 'Name of the MLOps project for resource tagging'
+  
+  DataBucketName:
+    Type: String
+    Default: 'lucaskle-ab3-project-pv'
+    Description: 'S3 bucket containing the drone imagery dataset'
+
+Resources:
+  # Data Scientist IAM Role - Restricted Permissions
+  DataScientistRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-DataScientist-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'aws:RequestedRegion': !Ref 'AWS::Region'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerReadOnly'
+      Policies:
+        - PolicyName: DataScientistRestrictedPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # SageMaker Studio Access
+              - Effect: Allow
+                Action:
+                  - 'sagemaker:CreatePresignedDomainUrl'
+                  - 'sagemaker:CreatePresignedNotebookInstanceUrl'
+                  - 'sagemaker:DescribeUserProfile'
+                  - 'sagemaker:DescribeDomain'
+                  - 'sagemaker:ListUserProfiles'
+                Resource: '*'
+              
+              # Read-only S3 access to dataset
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:GetBucketLocation'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${DataBucketName}'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/*'
+              
+              # MLFlow experiment tracking (read/write for experiments)
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ProjectName}-mlflow-artifacts'
+                  - !Sub 'arn:aws:s3:::${ProjectName}-mlflow-artifacts/*'
+              
+              # CloudWatch Logs for notebook instances
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogStreams'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/*'
+              
+              # Deny production and deployment resources
+              - Effect: Deny
+                Action:
+                  - 'sagemaker:CreateEndpoint*'
+                  - 'sagemaker:UpdateEndpoint*'
+                  - 'sagemaker:DeleteEndpoint*'
+                  - 'sagemaker:CreateModel'
+                  - 'sagemaker:DeleteModel'
+                  - 'sagemaker:CreatePipeline'
+                  - 'sagemaker:UpdatePipeline'
+                  - 'sagemaker:DeletePipeline'
+                  - 'sagemaker:StartPipelineExecution'
+                Resource: '*'
+      
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Role
+          Value: DataScientist
+        - Key: Environment
+          Value: Development
+
+  # ML Engineer IAM Role - Full Pipeline Access
+  MLEngineerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-MLEngineer-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'aws:RequestedRegion': !Ref 'AWS::Region'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+      Policies:
+        - PolicyName: MLEngineerFullAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Full SageMaker access for pipelines and deployment
+              - Effect: Allow
+                Action:
+                  - 'sagemaker:*'
+                Resource: '*'
+              
+              # EventBridge for pipeline notifications
+              - Effect: Allow
+                Action:
+                  - 'events:PutEvents'
+                  - 'events:PutRule'
+                  - 'events:PutTargets'
+                  - 'events:DeleteRule'
+                  - 'events:RemoveTargets'
+                Resource: '*'
+              
+              # CloudWatch for monitoring and logging
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:*'
+                  - 'logs:*'
+                Resource: '*'
+              
+              # IAM PassRole for SageMaker execution roles
+              - Effect: Allow
+                Action:
+                  - 'iam:PassRole'
+                Resource: 
+                  - !GetAtt SageMakerExecutionRole.Arn
+                  - !GetAtt DataScientistRole.Arn
+              
+              # Cost Explorer for cost monitoring
+              - Effect: Allow
+                Action:
+                  - 'ce:GetCostAndUsage'
+                  - 'ce:GetUsageReport'
+                  - 'ce:ListCostCategoryDefinitions'
+                Resource: '*'
+      
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Role
+          Value: MLEngineer
+        - Key: Environment
+          Value: Production
+
+  # SageMaker Execution Role for Training Jobs and Pipelines
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-SageMaker-Execution-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFullAccess'
+      Policies:
+        - PolicyName: SageMakerExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # S3 access for all project buckets
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                  - 's3:GetBucketLocation'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${DataBucketName}'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/*'
+                  - !Sub 'arn:aws:s3:::${ProjectName}-*'
+                  - !Sub 'arn:aws:s3:::${ProjectName}-*/*'
+              
+              # ECR access for custom containers
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                Resource: '*'
+              
+              # CloudWatch Logs
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+      
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Role
+          Value: SageMakerExecution
+
+  # SageMaker Studio Domain IAM Policy
+  SageMakerStudioPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub '${ProjectName}-SageMaker-Studio-Policy'
+      Description: 'Policy for SageMaker Studio access with role-based restrictions'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Basic SageMaker Studio permissions
+          - Effect: Allow
+            Action:
+              - 'sagemaker:CreatePresignedDomainUrl'
+              - 'sagemaker:DescribeDomain'
+              - 'sagemaker:ListDomains'
+              - 'sagemaker:DescribeUserProfile'
+              - 'sagemaker:ListUserProfiles'
+              - 'sagemaker:DescribeApp'
+              - 'sagemaker:ListApps'
+            Resource: '*'
+          
+          # Notebook instance permissions
+          - Effect: Allow
+            Action:
+              - 'sagemaker:CreateNotebookInstance'
+              - 'sagemaker:DescribeNotebookInstance'
+              - 'sagemaker:StartNotebookInstance'
+              - 'sagemaker:StopNotebookInstance'
+              - 'sagemaker:DeleteNotebookInstance'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'sagemaker:InstanceTypes': 
+                  - 'ml.t3.medium'
+                  - 'ml.t3.large'
+                  - 'ml.m5.large'
+                  - 'ml.m5.xlarge'
+          
+          # Resource tagging for governance
+          - Effect: Allow
+            Action:
+              - 'sagemaker:AddTags'
+              - 'sagemaker:ListTags'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'sagemaker:TagKeys': 
+                  - 'Project'
+                  - 'Environment'
+                  - 'Owner'
+
+Outputs:
+  DataScientistRoleArn:
+    Description: 'ARN of the Data Scientist IAM Role'
+    Value: !GetAtt DataScientistRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-DataScientist-Role-Arn'
+  
+  MLEngineerRoleArn:
+    Description: 'ARN of the ML Engineer IAM Role'
+    Value: !GetAtt MLEngineerRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-MLEngineer-Role-Arn'
+  
+  SageMakerExecutionRoleArn:
+    Description: 'ARN of the SageMaker Execution Role'
+    Value: !GetAtt SageMakerExecutionRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-SageMaker-Execution-Role-Arn'
+  
+  SageMakerStudioPolicyArn:
+    Description: 'ARN of the SageMaker Studio Policy'
+    Value: !Ref SageMakerStudioPolicy
+    Export:
+      Name: !Sub '${ProjectName}-SageMaker-Studio-Policy-Arn'

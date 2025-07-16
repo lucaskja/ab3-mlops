@@ -1,0 +1,23 @@
+{
+  "enabled": true,
+  "name": "Auto Commit & Push",
+  "description": "Automatically commits code changes using best practices and pushes to remote repository when a task is completed and all changes have been tested",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/**/*.py",
+      "scripts/**/*.py",
+      "scripts/**/*.sh",
+      "configs/**/*.py",
+      "configs/**/*.yaml",
+      "notebooks/**/*.ipynb",
+      "requirements.txt",
+      "README.md"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A task has been completed and code changes have been made. Please review the changes, ensure they follow best practices, create an appropriate commit message that clearly describes what was implemented/fixed, and then commit and push the changes to the remote repository. Make sure to: 1) Review all modified files for quality and consistency, 2) Write a clear, descriptive commit message following conventional commit format, 3) Stage the appropriate files, 4) Commit the changes, 5) Push to the remote repository."
+  }
+}
