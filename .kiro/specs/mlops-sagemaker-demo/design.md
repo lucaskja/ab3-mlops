@@ -21,6 +21,7 @@ graph TB
         Studio[SageMaker Studio]
         Notebooks[Jupyter Notebooks]
         MLFlow[MLFlow Tracking]
+        GroundTruth[Ground Truth Labeling]
     end
     
     subgraph "Pipeline Orchestration"
@@ -46,6 +47,8 @@ graph TB
     S3 --> Studio
     Studio --> Notebooks
     Notebooks --> MLFlow
+    Notebooks --> GroundTruth
+    GroundTruth --> S3
     Studio --> Pipeline
     Pipeline --> Processing
     Processing --> Training
@@ -56,6 +59,7 @@ graph TB
     Monitor --> Clarify
     IAM --> Studio
     IAM --> Pipeline
+    IAM --> GroundTruth
     EventBridge --> Monitor
     CloudWatch --> Monitor
 ```
@@ -148,7 +152,38 @@ graph LR
 - **Registration Step:** Automatic model registry with approval workflow
 - **Deployment Step:** Conditional deployment based on performance thresholds
 
-### 5. Model Monitoring and Governance
+### 5. Ground Truth Labeling Integration
+
+**Labeling Job Configuration:**
+- Pre-configured templates for object detection tasks
+- Custom labeling workflows for drone imagery annotation
+- Integration with SageMaker Studio notebooks
+- Automated job status tracking and metrics
+
+**Labeling Workflow:**
+```mermaid
+graph LR
+    A[Upload Images to S3] --> B[Create Labeling Job]
+    B --> C[Configure Annotation Task]
+    C --> D[Set Worker Type]
+    D --> E[Monitor Job Progress]
+    E --> F[Process Completed Labels]
+    F --> G[Convert to YOLOv11 Format]
+```
+
+**Worker Management:**
+- Support for private workforce through Cognito
+- Integration with Mechanical Turk for public workforce
+- Custom UIs for efficient object detection annotation
+- Quality control mechanisms for annotation consistency
+
+**Data Conversion:**
+- Automated conversion from Ground Truth output to YOLOv11 format
+- Validation of annotation quality and completeness
+- Integration with data preprocessing pipeline
+- Version tracking for labeled datasets
+
+### 6. Model Monitoring and Governance
 
 **SageMaker Model Monitor:**
 - Data quality monitoring for input drift detection

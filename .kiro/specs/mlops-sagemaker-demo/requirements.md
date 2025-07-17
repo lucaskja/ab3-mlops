@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This document outlines the requirements for creating a comprehensive MLOps Proof of Concept (PoC) demonstration using AWS SageMaker, focusing on governance, model monitoring, and pipeline orchestration. The demo will showcase the complete machine learning lifecycle from data ingestion to model deployment, with clear role separation between Data Scientists and ML Engineers, using YOLOv11 for object detection on a drone imagery dataset.
+This document outlines the requirements for creating a comprehensive MLOps Proof of Concept (PoC) demonstration using AWS SageMaker, focusing on governance, model monitoring, and pipeline orchestration. The demo will showcase the complete machine learning lifecycle from data ingestion to model deployment, with clear role separation between Data Scientists and ML Engineers, using YOLOv11 for object detection on a drone imagery dataset. The solution includes data labeling capabilities through SageMaker Ground Truth, enabling Data Scientists to easily create and manage labeling jobs directly from Jupyter notebooks in SageMaker Studio.
 
 ## Requirements
 
@@ -104,3 +104,15 @@ This document outlines the requirements for creating a comprehensive MLOps Proof
 2. WHEN setup instructions are provided THEN they SHALL include step-by-step configuration details
 3. WHEN code is delivered THEN it SHALL include inline comments and documentation
 4. WHEN the demo is presented THEN it SHALL include clear explanations of governance and role separation
+
+### Requirement 10
+
+**User Story:** As a Data Scientist, I want to create and manage data labeling jobs directly from Jupyter notebooks in SageMaker Studio, so that I can efficiently label drone imagery for model training.
+
+#### Acceptance Criteria
+
+1. WHEN a Data Scientist accesses SageMaker Studio THEN they SHALL have permissions to create Ground Truth labeling jobs
+2. WHEN creating a labeling job THEN the system SHALL provide pre-configured templates for object detection tasks
+3. WHEN a labeling job is created THEN the system SHALL automatically track job status and completion metrics
+4. WHEN labeling is complete THEN the system SHALL automatically format the results for YOLOv11 training
+5. WHEN labeling jobs are created THEN the system SHALL enforce cost controls and resource limits

@@ -38,6 +38,34 @@ This implementation plan follows the six-step process outlined in the [AWS SageM
   - Write utility functions for S3 data access with proper error handling
   - _Requirements: 1.1, 1.2, 1.3_
 
+- [ ] 3.1 Implement Ground Truth labeling job integration
+  - Create notebook template for Ground Truth labeling job creation and management
+  - Implement object detection task templates for drone imagery annotation
+  - Write functions to monitor labeling job progress and completion metrics
+  - Create utility functions to convert Ground Truth output to YOLOv11 format
+  - Implement cost control mechanisms for labeling job resource usage
+  - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+
+- [ ] 3.2 Create comprehensive Ground Truth utilities module
+  - Implement `ground_truth_utils.py` module in the `src/data` directory
+  - Create functions for labeling job configuration and submission
+  - Write job monitoring and status tracking utilities
+  - Implement format conversion from Ground Truth output to YOLOv11
+  - Create annotation quality validation functions
+  - Write cost estimation and budget control utilities
+  - Add unit tests for all Ground Truth utility functions
+  - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+
+- [ ] 3.3 Develop interactive labeling job notebook for Data Scientists
+  - Create comprehensive Jupyter notebook with step-by-step workflow
+  - Implement interactive widgets for job configuration and monitoring
+  - Add visualization tools for labeled data inspection
+  - Create example workflows for different annotation scenarios
+  - Implement best practices for efficient labeling job creation
+  - Add cost estimation and monitoring components
+  - Create documentation for labeling job creation process
+  - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+
 - [x] 4. Implement YOLOv11 training infrastructure
 - [x] 4.1 Create YOLOv11 data preprocessing pipeline
   - Write data preprocessing functions to convert drone imagery to YOLOv11 format
