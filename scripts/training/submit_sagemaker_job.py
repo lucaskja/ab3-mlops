@@ -25,6 +25,7 @@ sys.path.append(project_root)
 sys.path.append(os.path.join(project_root, 'src'))
 
 from pipeline.sagemaker_training import SageMakerTrainingOrchestrator, create_sagemaker_training_config
+from pipeline.mlflow_integration import MLFlowSageMakerIntegration, log_training_job
 from configs.project_config import get_config
 
 # Configure logging
@@ -227,6 +228,10 @@ def submit_training_job(orchestrator: SageMakerTrainingOrchestrator, args) -> Di
         
         logger.info(f"Job configuration: {training_config}")
         
+        # Get project config for MLFlow experiment name
+        project_config = get_config()
+        experiment_name = project_config.get('mlflow', {}).get('experiment_name', 'yolov11-drone-detection')
+        
         # Submit job
         result = orchestrator.submit_training_job(
             config=training_config,
@@ -234,7 +239,27 @@ def submit_training_job(orchestrator: SageMakerTrainingOrchestrator, args) -> Di
             logs=not args.no_logs
         )
         
-        logger.info(f"Training job submitted: {result['job_name']}")
+        job_name = result['job_name']
+        logger.info(f"Training job submitted: {job_name}")
+        
+        # Log job to MLFlow
+        try:
+            # Initialize MLFlow integration
+            mlflow_integration = MLFlowSageMakerIntegration(aws_profile=args.aws_profile)
+            
+            # Create run name from job name
+            run_name = f"sagemaker-{job_name}"
+            
+            # Log SageMaker job to MLFlow
+            run_id = log_training_job(job_name, experiment_name, run_name, args.aws_profile)
+            logger.info(f"Job logged to MLFlow with run ID: {run_id}")
+            
+            # Add MLFlow info to result
+            result['mlflow_run_id'] = run_id
+            result['mlflow_experiment'] = experiment_name
+            
+        except Exception as e:
+            logger.warning(f"Failed to log job to MLFlow: {str(e)}")
         
         # Monitor job if wait is enabled
         if args.wait:

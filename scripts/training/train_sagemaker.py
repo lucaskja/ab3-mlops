@@ -29,6 +29,7 @@ sys.path.append('/opt/ml/code')
 
 from models.yolov11_trainer import YOLOv11Trainer, TrainingConfig
 from data.s3_utils import S3DataAccess
+from pipeline.mlflow_integration import MLFlowSageMakerIntegration
 
 # Configure logging for SageMaker
 logging.basicConfig(
@@ -309,34 +310,78 @@ def main():
         # Prepare training data
         data_path = sm_env.prepare_training_data()
         
-        # Initialize trainer
-        trainer = YOLOv11Trainer(config)
+        # Initialize MLFlow integration
+        # In SageMaker, we use the default AWS credentials
+        mlflow_integration = MLFlowSageMakerIntegration(aws_profile='default')
         
-        # Start training
-        logger.info("Starting model training...")
+        # Create MLFlow experiment
+        experiment_name = config.experiment_name
+        run_name = f"{config.model_variant}_{config.name}"
         
-        if config.s3_bucket:
-            # Train with S3 data
-            results = trainer.train_with_s3_data(
-                s3_prefix=config.s3_data_prefix,
-                local_data_dir=data_path,
-                cleanup_after=False  # Don't cleanup in SageMaker
-            )
-        else:
-            # Train with local data
-            results = trainer.train(data_path=data_path)
-        
-        logger.info("Training completed successfully!")
-        
-        # Log final metrics for SageMaker
-        final_metrics = results.get('final_metrics', {})
-        log_training_metrics(final_metrics)
-        
-        # Save model artifacts
-        model_path = results.get('model_path', '')
-        sm_env.save_model_artifacts(model_path, results)
+        # Start MLFlow run
+        with mlflow.start_run(run_name=run_name) as run:
+            # Log parameters
+            mlflow_integration.log_parameters({
+                "model_variant": config.model_variant,
+                "pretrained": config.pretrained,
+                "epochs": config.epochs,
+                "batch_size": config.batch_size,
+                "learning_rate": config.learning_rate,
+                "image_size": config.image_size,
+                "num_classes": config.num_classes,
+                "device": config.device,
+                "is_distributed": is_distributed,
+                "sagemaker_job": os.environ.get('SM_TRAINING_JOB_NAME', 'unknown')
+            })
+            
+            # Initialize trainer
+            trainer = YOLOv11Trainer(config)
+            
+            # Start training
+            logger.info("Starting model training...")
+            
+            if config.s3_bucket:
+                # Train with S3 data
+                results = trainer.train_with_s3_data(
+                    s3_prefix=config.s3_data_prefix,
+                    local_data_dir=data_path,
+                    cleanup_after=False  # Don't cleanup in SageMaker
+                )
+            else:
+                # Train with local data
+                results = trainer.train(data_path=data_path)
+            
+            logger.info("Training completed successfully!")
+            
+            # Log final metrics to MLFlow
+            final_metrics = results.get('final_metrics', {})
+            mlflow_integration.log_metrics(final_metrics)
+            
+            # Log model artifacts to MLFlow
+            model_path = results.get('model_path', '')
+            if model_path and os.path.exists(model_path):
+                mlflow_integration.log_model(
+                    model_path=model_path,
+                    flavor="pytorch",
+                    registered_model_name=f"{config.model_variant}-yolov11"
+                )
+            
+            # Log SageMaker metrics for CloudWatch
+            log_training_metrics(final_metrics)
+            
+            # Save model artifacts
+            sm_env.save_model_artifacts(model_path, results)
+            
+            # Add MLFlow run ID to results
+            results['mlflow_run_id'] = run.info.run_id
+            
+            # Save updated results with MLFlow information
+            results_file = sm_env.model_path / 'training_results.json'
+            with open(results_file, 'w') as f:
+                json.dump(results, f, indent=2, default=str)
         
         logger.info("SageMaker training job completed successfully!")
+        logger.info(f"MLFlow run ID: {run.info.run_id}")
         
         return 0
         
