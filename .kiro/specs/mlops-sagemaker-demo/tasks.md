@@ -103,15 +103,15 @@
   - Write pipeline failure handling and notification logic
   - _Requirements: 6.1, 6.2, 6.3_
 
-- [ ] 7. Implement model monitoring and governance
-- [ ] 7.1 Set up SageMaker Model Monitor
+- [-] 7. Implement model monitoring and governance
+- [x] 7.1 Set up SageMaker Model Monitor
   - Write Model Monitor configuration for data quality monitoring
   - Create baseline calculation functions for drift detection
   - Implement scheduled monitoring job configuration
   - Write monitoring report analysis and alerting functions
   - _Requirements: 5.1, 5.2, 5.3_
 
-- [ ] 7.2 Integrate SageMaker Clarify for explainability
+- [x] 7.2 Integrate SageMaker Clarify for explainability
   - Write Clarify job configuration for bias detection
   - Implement feature importance analysis functions
   - Create explainability report generation utilities
@@ -125,6 +125,14 @@
   - Create custom event publishing functions for application events
   - Write event handling and routing logic with proper error handling
   - _Requirements: 2.4, 5.3_
+
+- [ ] 7.4 Implement automated model retraining triggers
+  - Create data drift detection thresholds that trigger retraining
+  - Implement scheduled model evaluation jobs to detect performance degradation
+  - Set up EventBridge rules to automatically start pipeline on drift detection
+  - Add notification system for automated retraining events
+  - Implement approval workflow for model updates
+  - _Requirements: 5.2, 5.3, 6.1_
 
 - [ ] 8. Create comprehensive documentation and demo materials
 - [ ] 8.1 Write central README.md documentation with professional diagrams
@@ -141,6 +149,8 @@
   - Create role-specific demo notebooks for Data Scientist and ML Engineer personas
   - Write automated demo setup and teardown scripts
   - Create presentation materials explaining governance and monitoring features
+  - Implement Jupyter notebook widgets for interactive parameter tuning
+  - Add visualization components for real-time model performance monitoring
   - _Requirements: 9.3, 9.4_
 
 - [ ] 8.3 Implement cost monitoring and reporting with enhanced analysis
@@ -159,6 +169,17 @@
   - Implement tests for MLFlow integration and pipeline components
   - Create tests for monitoring and governance functions
   - _Requirements: All requirements validation_
+
+- [ ] 9.3 Refactor SageMaker Pipeline implementation for maintainability
+  - Split the 3000+ line sagemaker_pipeline.py into smaller, focused modules (preprocessing.py, training.py, evaluation.py, etc.)
+  - Implement a Pipeline Factory pattern to assemble pipeline components
+  - Extract script generation code to a separate template module
+  - Implement dependency injection for better testability
+  - Create a session manager class to handle AWS session creation
+  - Add comprehensive configuration validation
+  - Enhance logging with structured context information
+  - Reduce code duplication through utility functions
+  - _Requirements: 6.1, 6.2, 6.3, 9.3_
 
 - [ ] 9.2 Implement integration tests
   - Write end-to-end pipeline testing with sample data
@@ -185,6 +206,14 @@
   - Validate all security suppressions have proper justification
   - Write security validation automation scripts
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
+
+- [ ] 11.3 Implement CDK constructs for infrastructure consistency
+  - Create custom CDK constructs for common SageMaker infrastructure patterns
+  - Implement L2 constructs for MLOps-specific resources
+  - Add proper tagging strategy across all resources for cost allocation
+  - Implement environment-specific configurations (dev/staging/prod)
+  - Add drift detection for infrastructure changes
+  - _Requirements: 3.1, 3.3, 8.1, 8.2_
 
 - [ ] 11.2 Validate observability implementation
   - Verify Lambda Powertools integration across all Lambda functions
