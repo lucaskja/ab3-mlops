@@ -1,85 +1,129 @@
 #!/bin/bash
-# CDK Deployment Script for MLOps SageMaker Demo
-# This script deploys the CDK stacks for the MLOps SageMaker Demo project
+# Deploy CDK stack for Lambda-SageMaker endpoint deployment
 
 set -e
 
-# Color codes for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+# Get script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 
-# Print with colors
-print_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
+# Default values
+AWS_PROFILE="ab"
+AWS_REGION="us-east-1"
+STACK_NAME=""
+LAMBDA_CODE_PATH="$PROJECT_ROOT/scripts/training"
 
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  key="$1"
+  case $key in
+    --profile)
+      AWS_PROFILE="$2"
+      shift
+      shift
+      ;;
+    --region)
+      AWS_REGION="$2"
+      shift
+      shift
+      ;;
+    --stack-name)
+      STACK_NAME="$2"
+      shift
+      shift
+      ;;
+    --lambda-code-path)
+      LAMBDA_CODE_PATH="$2"
+      shift
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+done
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+# Set AWS profile
+export AWS_PROFILE=$AWS_PROFILE
+export AWS_DEFAULT_REGION=$AWS_REGION
 
-# Check if AWS profile is set
-if [ -z "$AWS_PROFILE" ]; then
-    print_warning "AWS_PROFILE environment variable not set. Using --profile ab flag."
-    PROFILE_FLAG="--profile ab"
-else
-    print_info "Using AWS_PROFILE: $AWS_PROFILE"
-    PROFILE_FLAG=""
+# Load project configuration
+echo "Loading project configuration..."
+PROJECT_NAME=$(python3 -c "from configs.project_config import PROJECT_NAME; print(PROJECT_NAME)")
+MODEL_NAME=$(python3 -c "from configs.project_config import MODEL_NAME; print(MODEL_NAME)")
+SAGEMAKER_ROLE_ARN=$(python3 -c "from configs.project_config import get_config; print(get_config()['iam']['roles']['sagemaker_execution']['arn'])")
+
+# Set stack name if not provided
+if [ -z "$STACK_NAME" ]; then
+  STACK_NAME="${PROJECT_NAME}-endpoint-stack"
 fi
 
-# Check if CDK is installed
-if ! command -v cdk &> /dev/null; then
-    print_error "AWS CDK is not installed. Please install it with 'npm install -g aws-cdk'"
-    exit 1
+echo "Project name: $PROJECT_NAME"
+echo "Model name: $MODEL_NAME"
+echo "SageMaker role ARN: $SAGEMAKER_ROLE_ARN"
+echo "Stack name: $STACK_NAME"
+echo "Lambda code path: $LAMBDA_CODE_PATH"
+
+# Check if Lambda code exists
+if [ ! -f "$LAMBDA_CODE_PATH/deploy_endpoint_lambda.py" ]; then
+  echo "Lambda code not found at $LAMBDA_CODE_PATH/deploy_endpoint_lambda.py"
+  exit 1
 fi
 
 # Navigate to CDK directory
-print_info "Navigating to CDK directory..."
-cd "$(dirname "$0")/../../configs/cdk" || exit 1
+cd "$PROJECT_ROOT/configs/cdk"
 
 # Install dependencies if needed
 if [ ! -d "node_modules" ]; then
-    print_info "Installing dependencies..."
-    npm install
+  echo "Installing CDK dependencies..."
+  npm install
 fi
 
-# Build TypeScript code
-print_info "Building TypeScript code..."
-npm run build
+# Deploy CDK stack
+echo "Deploying CDK stack..."
+npx cdk deploy $STACK_NAME \
+  --parameters projectName=$PROJECT_NAME \
+  --parameters modelName=$MODEL_NAME \
+  --parameters sagemakerRoleArn=$SAGEMAKER_ROLE_ARN \
+  --parameters lambdaCodePath=$LAMBDA_CODE_PATH \
+  --require-approval never
 
-# Bootstrap CDK (if needed)
-print_info "Checking if CDK bootstrap is needed..."
-cdk bootstrap $PROFILE_FLAG || {
-    print_error "CDK bootstrap failed. Please check your AWS credentials and permissions."
-    exit 1
-}
+# Get Lambda function ARN
+LAMBDA_ARN=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='DeployEndpointLambdaArn'].OutputValue" --output text)
 
-# Synthesize CloudFormation templates
-print_info "Synthesizing CloudFormation templates..."
-cdk synth
+echo "Lambda function ARN: $LAMBDA_ARN"
 
-# Deploy stacks
-print_info "Deploying IAM stack..."
-cdk deploy MLOpsSageMakerIAMStack --require-approval never $PROFILE_FLAG || {
-    print_error "IAM stack deployment failed."
-    exit 1
-}
+# Update project configuration with Lambda ARN
+echo "Updating project configuration with Lambda ARN..."
+CONFIG_FILE="$PROJECT_ROOT/configs/project_config.py"
 
-print_info "Deploying Endpoint stack..."
-cdk deploy MLOpsSageMakerEndpointStack --require-approval never $PROFILE_FLAG || {
-    print_error "Endpoint stack deployment failed."
-    exit 1
-}
+# Check if deployment section exists in config
+if grep -q "deployment" "$CONFIG_FILE"; then
+  # Update existing deployment section
+  sed -i '' "s|'lambda_arn': '.*'|'lambda_arn': '$LAMBDA_ARN'|g" "$CONFIG_FILE"
+else
+  # Add deployment section
+  awk -v arn="$LAMBDA_ARN" '
+  /COST_ALLOCATION_TAGS = {/ {
+    print;
+    print "}\n";
+    print "# Deployment Configuration";
+    print "DEPLOYMENT_CONFIG = {";
+    print "    \"lambda_arn\": \"" arn "\"";
+    print "}";
+    next;
+  }
+  /}/ && !done {
+    if (prev ~ /CostCenter/) {
+      done = 1;
+      next;
+    }
+  }
+  { prev = $0; print }
+  ' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+fi
 
-print_info "Deployment completed successfully!"
-print_info "Running validation..."
-
-# Run validation script
-"$(dirname "$0")/validate_cdk_deployment.sh"
-
-print_info "All done!"
+echo "Deployment completed successfully!"
+echo "You can now use the Lambda function ARN in your SageMaker pipeline."
+echo "Lambda ARN: $LAMBDA_ARN"
