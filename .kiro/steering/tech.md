@@ -68,3 +68,15 @@ aws cloudformation describe-stacks --stack-name mlops-sagemaker-demo-iam-roles -
 - **Infrastructure**: CloudFormation templates and bash scripts
 - **Testing**: Manual validation scripts (no automated test suite)
 - **Deployment**: Shell scripts for AWS resource provisioning
+
+## MCP Servers (Available for AI Assistant)
+- **AWS Documentation**: Search and access AWS documentation directly
+- **AWS CDK**: Get CDK guidance, patterns, and construct information
+- **AWS Core**: General AWS expert advice and prompt understanding
+- **Frontend**: React and web application development assistance
+
+### MCP Capabilities
+- **Documentation Search**: Find relevant AWS documentation for services and features
+- **CDK Patterns**: Access AWS Solutions Constructs and CDK best practices
+- **GenAI Constructs**: Search for AI/ML specific CDK constructs and patterns
+- **CDK Nag**: Security and compliance rule explanations and guidance

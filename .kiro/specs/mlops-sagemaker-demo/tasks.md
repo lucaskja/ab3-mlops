@@ -14,6 +14,14 @@
   - Write scripts to validate role-based access controls
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
+- [x] 2.1 Migrate to CDK with AWS Solutions Constructs and security validation
+  - Migrate existing CloudFormation templates to AWS CDK with TypeScript
+  - Implement aws-lambda-sagemakerendpoint Solutions Construct for inference endpoints
+  - Implement aws-apigateway-sagemakerendpoint Solutions Construct for API access
+  - Add CDK Nag security validation to all infrastructure stacks
+  - Write CDK deployment and validation scripts
+  - _Requirements: 3.1, 3.2, 3.3, 3.4_
+
 - [x] 3. Create data exploration and profiling notebooks
   - Write Jupyter notebook for dataset exploration and visualization from S3 bucket
   - Implement data profiling functions to analyze drone imagery characteristics
@@ -66,9 +74,10 @@
   - Write step configuration and parameter management functions
   - _Requirements: 6.1, 6.2_
 
-- [ ] 6.2 Implement pipeline training step
+- [ ] 6.2 Implement pipeline training step with observability
   - Write SageMaker Training step configuration for YOLOv11
   - Create training container with YOLOv11 and MLFlow integration
+  - Implement Lambda Powertools for structured logging and tracing in training containers
   - Implement hyperparameter tuning job configuration
   - Write training step output artifact management
   - _Requirements: 6.1, 6.3_
@@ -80,10 +89,10 @@
   - Write evaluation metrics calculation and comparison functions
   - _Requirements: 6.1, 4.3_
 
-- [ ] 6.4 Implement pipeline deployment step
+- [ ] 6.4 Implement pipeline deployment step with AWS Solutions Constructs
   - Write conditional deployment step based on model performance
-  - Create SageMaker endpoint configuration and deployment functions
-  - Implement auto-scaling configuration for inference endpoints
+  - Use aws-lambda-sagemakerendpoint Solutions Construct for endpoint deployment
+  - Implement auto-scaling configuration for inference endpoints with best practices
   - Write deployment validation and health check functions
   - _Requirements: 6.1, 6.4_
 
@@ -109,18 +118,21 @@
   - Write functions to integrate Clarify results with monitoring dashboard
   - _Requirements: 5.4_
 
-- [ ] 7.3 Create EventBridge integration for alerting
+- [ ] 7.3 Create EventBridge integration for alerting with AWS Solutions Constructs
+  - Use aws-eventbridge-lambda Solutions Construct for robust event handling
   - Write EventBridge rules for pipeline and monitoring events
   - Implement notification functions for different alert types
   - Create custom event publishing functions for application events
-  - Write event handling and routing logic
+  - Write event handling and routing logic with proper error handling
   - _Requirements: 2.4, 5.3_
 
 - [ ] 8. Create comprehensive documentation and demo materials
-- [ ] 8.1 Write central README.md documentation
-  - Create comprehensive project overview with architecture diagrams
+- [ ] 8.1 Write central README.md documentation with professional diagrams
+  - Generate professional architecture diagrams using AWS Diagram MCP server
+  - Create comprehensive project overview with visual architecture representations
   - Write step-by-step setup and configuration instructions
   - Document role-based access control and governance features
+  - Reference official AWS documentation using AWS Documentation MCP server
   - Include cost optimization guidelines and cleanup procedures
   - _Requirements: 9.1, 9.2, 8.4_
 
@@ -131,9 +143,11 @@
   - Create presentation materials explaining governance and monitoring features
   - _Requirements: 9.3, 9.4_
 
-- [ ] 8.3 Implement cost monitoring and reporting
+- [ ] 8.3 Implement cost monitoring and reporting with enhanced analysis
   - Write cost tracking functions using AWS Cost Explorer API with "ab" profile
+  - Use Cost Analysis MCP server for detailed cost reports and optimization recommendations
   - Create cost reporting dashboard for PoC resource usage
+  - Generate cost comparison reports for different instance types and configurations
   - Implement cost alerting functions for budget thresholds
   - Write resource cleanup automation scripts for cost optimization
   - _Requirements: 8.1, 8.2, 8.3, 8.4_
@@ -164,7 +178,22 @@
   - Execute infrastructure validation and health checks
   - _Requirements: Complete AWS infrastructure deployment_
 
-- [ ] 11. Final integration and deployment validation
+- [ ] 11. Security and compliance validation
+- [ ] 11.1 Run CDK Nag security validation
+  - Execute CDK Nag security checks across all infrastructure stacks
+  - Generate security compliance reports with remediation recommendations
+  - Validate all security suppressions have proper justification
+  - Write security validation automation scripts
+  - _Requirements: 3.1, 3.2, 3.3, 3.4_
+
+- [ ] 11.2 Validate observability implementation
+  - Verify Lambda Powertools integration across all Lambda functions
+  - Test structured logging and distributed tracing functionality
+  - Validate monitoring dashboards and alerting mechanisms
+  - Write observability validation tests
+  - _Requirements: 2.4, 5.1, 5.2, 5.3_
+
+- [ ] 12. Final integration and deployment validation
   - Execute complete end-to-end workflow validation in AWS
   - Verify all governance and role separation requirements
   - Test all monitoring and alerting functionality
