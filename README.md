@@ -122,6 +122,35 @@ MONITORING_SCHEDULE_CRON = "cron(0 */6 * * ? *)"  # Every 6 hours
 
 ## 🛠️ Core Components
 
+### SageMaker Pipeline Utilities
+- **Pipeline Builder**: Comprehensive SageMaker Pipeline implementation in `src/pipeline/sagemaker_pipeline.py`
+- **Code Maintenance**: Utility script `fix_sagemaker_pipeline.py` to fix code duplication and syntax issues
+- **Pipeline Optimization**: Automated code cleanup for maintainability and reliability
+- **Error Handling**: Robust error detection and correction for pipeline code
+
+#### SageMaker Pipeline Code Fixer
+The `fix_sagemaker_pipeline.py` utility script addresses specific issues in the SageMaker Pipeline implementation:
+
+```bash
+# Run the pipeline code fixer
+python fix_sagemaker_pipeline.py
+```
+
+This script:
+- Removes duplicate method definitions that were causing errors
+- Fixes syntax issues in the pipeline code
+- Corrects indentation problems
+- Outputs a fixed version to `src/pipeline/sagemaker_pipeline.py.fixed`
+
+After running the script, review the fixed file and replace the original:
+```bash
+# Review changes
+diff src/pipeline/sagemaker_pipeline.py src/pipeline/sagemaker_pipeline.py.fixed
+
+# Replace original with fixed version
+mv src/pipeline/sagemaker_pipeline.py.fixed src/pipeline/sagemaker_pipeline.py
+```
+
 ### Data Processing Pipeline
 - **S3 Data Access**: Secure, role-based data access with comprehensive error handling
 - **Data Profiling**: Automated analysis of drone imagery characteristics
@@ -284,6 +313,7 @@ COST_ALLOCATION_TAGS = {
 - [x] Data validation framework
 - [x] Comprehensive unit tests
 - [x] Setup and deployment scripts
+- [x] SageMaker Pipeline code fixes and optimization (duplicate method removal and syntax fixes)
 
 ### 🔄 In Progress
 - [ ] YOLOv11 training implementation
