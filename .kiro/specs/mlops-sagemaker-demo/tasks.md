@@ -1,5 +1,14 @@
 # Implementation Plan
 
+This implementation plan follows the six-step process outlined in the [AWS SageMaker MLOps reference implementation](https://github.com/aws-samples/amazon-sagemaker-from-idea-to-production):
+
+1. **Experiment in a notebook** - Tasks 1-3
+2. **Scale with SageMaker processing jobs and Python SDK** - Tasks 4.1-4.3
+3. **Operationalize with ML pipeline, model registry, and feature store** - Tasks 5-6
+4. **Add a model building CI/CD pipeline** - Tasks 7-8
+5. **Add a model deployment pipeline** - Tasks 9-10
+6. **Add model and data monitoring** - Tasks 11-12
+
 - [x] 1. Set up project structure and configuration files
   - Create directory structure for notebooks, scripts, configs, and documentation
   - Write AWS CLI configuration script using "ab" profile
