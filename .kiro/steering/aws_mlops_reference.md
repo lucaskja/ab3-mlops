@@ -8,7 +8,7 @@ The AWS reference implementation follows a six-step process for moving from ML i
 
 1. **Experiment in a notebook** - Initial development and experimentation
 2. **Scale with SageMaker processing jobs and Python SDK** - Moving computation to SageMaker
-3. **Operationalize with ML pipeline, model registry, and feature store** - Building automation
+3. **Operationalize with ML pipeline and model registry** - Building automation
 4. **Add a model building CI/CD pipeline** - Automating the model building process
 5. **Add a model deployment pipeline** - Automating model deployment
 6. **Add model and data monitoring** - Ensuring ongoing quality

@@ -4,7 +4,7 @@ This implementation plan follows the six-step process outlined in the [AWS SageM
 
 1. **Experiment in a notebook** - Tasks 1-3
 2. **Scale with SageMaker processing jobs and Python SDK** - Tasks 4.1-4.3
-3. **Operationalize with ML pipeline, model registry, and feature store** - Tasks 5-6
+3. **Operationalize with ML pipeline and model registry** - Tasks 5-6
 4. **Add a model building CI/CD pipeline** - Tasks 7-8
 5. **Add a model deployment pipeline** - Tasks 9-10
 6. **Add model and data monitoring** - Tasks 11-12
@@ -142,14 +142,6 @@ This implementation plan follows the six-step process outlined in the [AWS SageM
   - Add notification system for automated retraining events
   - Implement approval workflow for model updates
   - _Requirements: 5.2, 5.3, 6.1_
-
-- [ ] 7.5 Implement SageMaker Feature Store integration
-  - Create feature groups for drone imagery metadata and annotations
-  - Implement feature extraction from raw images
-  - Set up feature ingestion pipeline
-  - Create feature retrieval functions for training and inference
-  - Implement feature lineage tracking
-  - _Requirements: 6.1, 6.2_
 
 - [ ] 8. Create comprehensive documentation and demo materials
 - [ ] 8.1 Write central README.md documentation with professional diagrams

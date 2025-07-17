@@ -8,7 +8,7 @@ The reference implementation follows a six-step process for moving from ML idea 
 
 1. **Experiment in a notebook** - Initial development and experimentation
 2. **Scale with SageMaker processing jobs and Python SDK** - Moving computation to SageMaker
-3. **Operationalize with ML pipeline, model registry, and feature store** - Building automation
+3. **Operationalize with ML pipeline and model registry** - Building automation
 4. **Add a model building CI/CD pipeline** - Automating the model building process
 5. **Add a model deployment pipeline** - Automating model deployment
 6. **Add model and data monitoring** - Ensuring ongoing quality
@@ -37,17 +37,12 @@ Our MLOps SageMaker Demo should align with these best practices:
 - Implement approval workflows
 - Track model lineage and metadata
 
-### 5. Feature Store
-- Store and manage features for training and inference
-- Implement feature groups for different data domains
-- Enable feature reuse across models
-
-### 6. Model Monitoring
+### 5. Model Monitoring
 - Configure data quality monitoring
 - Implement model quality monitoring
 - Set up drift detection and alerting
 
-### 7. CI/CD Integration
+### 6. CI/CD Integration
 - Automate model building and deployment
 - Implement testing at each stage
 - Use EventBridge for notifications and triggers
