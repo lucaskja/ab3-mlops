@@ -143,6 +143,14 @@ This implementation plan follows the six-step process outlined in the [AWS SageM
   - Implement approval workflow for model updates
   - _Requirements: 5.2, 5.3, 6.1_
 
+- [ ] 7.5 Implement SageMaker Feature Store integration
+  - Create feature groups for drone imagery metadata and annotations
+  - Implement feature extraction from raw images
+  - Set up feature ingestion pipeline
+  - Create feature retrieval functions for training and inference
+  - Implement feature lineage tracking
+  - _Requirements: 6.1, 6.2_
+
 - [ ] 8. Create comprehensive documentation and demo materials
 - [ ] 8.1 Write central README.md documentation with professional diagrams
   - Generate professional architecture diagrams using AWS Diagram MCP server
@@ -171,6 +179,14 @@ This implementation plan follows the six-step process outlined in the [AWS SageM
   - Write resource cleanup automation scripts for cost optimization
   - _Requirements: 8.1, 8.2, 8.3, 8.4_
 
+- [ ] 8.4 Create comprehensive clean-up procedures
+  - Write clean-up notebook similar to the AWS reference implementation
+  - Implement automated resource termination scripts
+  - Create checklist for manual resource verification
+  - Document cost-saving strategies for idle resources
+  - Add safeguards to prevent accidental deletion of important resources
+  - _Requirements: 8.4_
+
 - [ ] 9. Create testing and validation framework
 - [ ] 9.1 Write unit tests for all components
   - Create unit tests for data preprocessing functions
@@ -178,6 +194,14 @@ This implementation plan follows the six-step process outlined in the [AWS SageM
   - Implement tests for MLFlow integration and pipeline components
   - Create tests for monitoring and governance functions
   - _Requirements: All requirements validation_
+
+- [ ] 9.4 Implement SageMaker Projects for CI/CD
+  - Set up SageMaker Project template for model building pipeline
+  - Configure CodePipeline integration for automated builds
+  - Implement Git-based workflow with pull request validation
+  - Create seed code templates for model building and deployment
+  - Set up automated testing in the CI/CD pipeline
+  - _Requirements: 2.1, 2.3, 3.4_
 
 - [ ] 9.3 Refactor SageMaker Pipeline implementation for maintainability
   - Split the 3000+ line sagemaker_pipeline.py into smaller, focused modules (preprocessing.py, training.py, evaluation.py, etc.)
