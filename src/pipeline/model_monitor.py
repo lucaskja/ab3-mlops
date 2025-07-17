@@ -4,10 +4,31 @@ SageMaker Model Monitor Implementation
 This module provides functionality for setting up and managing SageMaker Model Monitor
 for data quality monitoring, drift detection, and alerting.
 
+The ModelMonitoringManager class handles:
+- Data capture configuration for SageMaker endpoints
+- Baseline constraint creation for monitoring
+- Data quality monitoring setup and scheduling
+- Model quality monitoring for performance tracking
+- CloudWatch alarms for violation detection
+- SNS notifications for alerting stakeholders
+- Analysis of monitoring results and drift detection
+
 Requirements addressed:
 - 5.1: Automatic configuration of SageMaker Model Monitor when a model is deployed
 - 5.2: Capture input data and predictions for monitoring
 - 5.3: Trigger alerts through EventBridge when data drift is detected
+- 5.4: Integration with SageMaker Clarify for explainability
+
+Usage:
+    # Initialize the monitoring manager
+    monitor_manager = ModelMonitoringManager(aws_profile="ab")
+    
+    # Set up complete monitoring for an endpoint
+    monitoring_config = monitor_manager.setup_complete_monitoring_solution(
+        endpoint_name="my-endpoint",
+        baseline_dataset="s3://bucket/baseline.csv",
+        email_notifications=["alerts@example.com"]
+    )
 """
 
 import os

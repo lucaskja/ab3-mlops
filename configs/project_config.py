@@ -108,15 +108,34 @@ def get_iam_roles() -> Dict[str, str]:
     }
 
 
-def get_config() -> Dict[str, Any]:
-    """Return complete configuration dictionary"""
+def get_config(environment: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Return complete configuration dictionary with environment-specific overrides.
+    
+    Args:
+        environment: Optional environment name (development, staging, production)
+                    If None, uses the environment from environment_config.get_environment()
+    
+    Returns:
+        Dict[str, Any]: Complete configuration dictionary
+    """
+    # Import here to avoid circular imports
+    from configs.environment_config import get_environment, load_environment_config, deep_merge
+    
+    # Get environment-specific configuration
+    if environment is None:
+        environment = get_environment()
+    
+    env_config = load_environment_config(environment)
     iam_roles = get_iam_roles()
     
-    return {
+    # Base configuration
+    base_config = {
         "project": {
             "name": PROJECT_NAME,
             "version": PROJECT_VERSION,
-            "description": PROJECT_DESCRIPTION
+            "description": PROJECT_DESCRIPTION,
+            "environment": environment
         },
         "aws": {
             "profile": AWS_PROFILE,
@@ -189,6 +208,9 @@ def get_config() -> Dict[str, Any]:
             "eventbridge_rule": EVENTBRIDGE_RULE_NAME
         }
     }
+    
+    # Merge base config with environment-specific config
+    return deep_merge(base_config, env_config)
 
 
 if __name__ == "__main__":
