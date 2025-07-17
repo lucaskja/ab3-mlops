@@ -68,7 +68,7 @@ graph TB
 - **Experiment Tracking**: MLFlow integration for model versioning
 - **Monitoring**: Model performance and data drift monitoring
 - **Governance**: IAM role-based access control for different team roles
-- **Data Labeling**: Ground Truth integration for efficient dataset creation
+- **Data Labeling**: Ground Truth integration for efficient dataset creation with automated YOLO format conversion
 
 ## Project Structure
 
@@ -165,7 +165,7 @@ This project implements strict role separation:
 ### Data Scientists
 
 1. **Data Exploration**: Use notebooks in `notebooks/data-exploration/` to analyze the drone imagery dataset.
-2. **Data Labeling**: Create and manage Ground Truth labeling jobs using notebooks in `notebooks/data-labeling/`.
+2. **Data Labeling**: Create and manage Ground Truth labeling jobs using notebooks in `notebooks/data-labeling/` or run the example script in `examples/data-labeling/ground_truth_example.py`.
 3. **Model Development**: Experiment with YOLOv11 models using notebooks in `notebooks/model-development/`.
 
 ### ML Engineers
@@ -182,6 +182,25 @@ This project implements strict role separation:
 4. **Pipeline Orchestration**: Automate the ML workflow with SageMaker Pipelines
 5. **Model Deployment**: Deploy models to SageMaker endpoints
 6. **Monitoring**: Set up drift detection and performance monitoring
+
+### Ground Truth Labeling Workflow
+
+The project includes a comprehensive workflow for creating and managing SageMaker Ground Truth labeling jobs:
+
+```bash
+# Run the Ground Truth example script
+python examples/data-labeling/ground_truth_example.py --bucket lucaskle-ab3-project-pv --prefix raw-images
+```
+
+The Ground Truth labeling workflow includes:
+
+1. **Manifest Creation**: Automatically generate manifest files for your images
+2. **Job Configuration**: Configure labeling jobs with custom categories and instructions
+3. **Job Monitoring**: Track labeling progress and completion metrics
+4. **Format Conversion**: Automatically convert Ground Truth output to YOLOv11 format
+5. **Cost Management**: Set budget limits and track labeling expenses
+
+For more detailed control, use the interactive Jupyter notebook in `notebooks/data-labeling/create_labeling_job.ipynb`.
 
 ## Cost Management
 
