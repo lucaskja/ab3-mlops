@@ -215,13 +215,12 @@ This implementation plan follows the six-step process outlined in the [AWS SageM
   - Create tests for monitoring and governance functions
   - _Requirements: All requirements validation_
 
-- [ ] 9.4 Implement SageMaker Projects for CI/CD
-  - Set up SageMaker Project template for model building pipeline
-  - Configure CodePipeline integration for automated builds
-  - Implement Git-based workflow with pull request validation
-  - Create seed code templates for model building and deployment
-  - Set up automated testing in the CI/CD pipeline
-  - _Requirements: 2.1, 2.3, 3.4_
+- [ ] 9.2 Implement integration tests
+  - Write end-to-end pipeline testing with sample data
+  - Create role-based access control validation tests
+  - Implement monitoring and alerting integration tests
+  - Write performance and load testing for inference endpoints
+  - _Requirements: All requirements validation_
 
 - [x] 9.3 Refactor SageMaker Pipeline implementation for maintainability
   - Split the 3000+ line sagemaker_pipeline.py into smaller, focused modules (preprocessing.py, training.py, evaluation.py, etc.)
@@ -234,12 +233,13 @@ This implementation plan follows the six-step process outlined in the [AWS SageM
   - Reduce code duplication through utility functions
   - _Requirements: 6.1, 6.2, 6.3, 9.3_
 
-- [ ] 9.2 Implement integration tests
-  - Write end-to-end pipeline testing with sample data
-  - Create role-based access control validation tests
-  - Implement monitoring and alerting integration tests
-  - Write performance and load testing for inference endpoints
-  - _Requirements: All requirements validation_
+- [ ] 9.4 Implement SageMaker Projects for CI/CD
+  - Set up SageMaker Project template for model building pipeline
+  - Configure CodePipeline integration for automated builds
+  - Implement Git-based workflow with pull request validation
+  - Create seed code templates for model building and deployment
+  - Set up automated testing in the CI/CD pipeline
+  - _Requirements: 2.1, 2.3, 3.4_
 
 - [ ] 10. Deploy complete infrastructure to AWS account
   - Execute CloudFormation stack deployment for IAM roles and policies
@@ -260,6 +260,13 @@ This implementation plan follows the six-step process outlined in the [AWS SageM
   - Write security validation automation scripts
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
+- [ ] 11.2 Validate observability implementation
+  - Verify Lambda Powertools integration across all Lambda functions
+  - Test structured logging and distributed tracing functionality
+  - Validate monitoring dashboards and alerting mechanisms
+  - Write observability validation tests
+  - _Requirements: 2.4, 5.1, 5.2, 5.3_
+
 - [ ] 11.3 Implement CDK constructs for infrastructure consistency
   - Create custom CDK constructs for common SageMaker infrastructure patterns
   - Implement L2 constructs for MLOps-specific resources
@@ -267,13 +274,6 @@ This implementation plan follows the six-step process outlined in the [AWS SageM
   - Implement environment-specific configurations (dev/staging/prod)
   - Add drift detection for infrastructure changes
   - _Requirements: 3.1, 3.3, 8.1, 8.2_
-
-- [ ] 11.2 Validate observability implementation
-  - Verify Lambda Powertools integration across all Lambda functions
-  - Test structured logging and distributed tracing functionality
-  - Validate monitoring dashboards and alerting mechanisms
-  - Write observability validation tests
-  - _Requirements: 2.4, 5.1, 5.2, 5.3_
 
 - [ ] 12. Final integration and deployment validation
   - Execute complete end-to-end workflow validation in AWS
