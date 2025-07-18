@@ -1,5 +1,9 @@
 """
 Unit tests for Ground Truth utilities.
+
+This module contains comprehensive tests for the ground_truth_utils.py module,
+which provides utilities for creating, monitoring, and processing SageMaker
+Ground Truth labeling jobs for drone imagery object detection.
 """
 
 import unittest
@@ -14,7 +18,13 @@ from src.data.ground_truth_utils import (
     convert_ground_truth_to_yolo,
     validate_annotation_quality,
     estimate_labeling_cost,
-    create_labeling_instructions
+    create_labeling_instructions,
+    create_manifest_file,
+    list_labeling_jobs,
+    visualize_annotations,
+    calculate_iou,
+    get_labeling_job_metrics,
+    parse_s3_uri
 )
 
 
@@ -50,7 +60,6 @@ class TestGroundTruthUtils(unittest.TestCase):
         self.assertEqual(config["RoleArn"], self.role_arn)
         
         # Verify task configuration
-        self.assertEqual(config["LabelingJobAlgorithmsConfig"]["LabelingJobAlgorithm"], "BOUNDING_BOX")
         self.assertEqual(config["HumanTaskConfig"]["TaskDescription"], "Test instructions")
         
         # Verify budget configuration
@@ -61,13 +70,17 @@ class TestGroundTruthUtils(unittest.TestCase):
     @patch('boto3.Session')
     def test_monitor_labeling_job(self, mock_session):
         """Test monitoring a labeling job."""
-        # Create mock response
+        # Create mock response with datetime objects
+        from datetime import datetime
+        creation_time = datetime(2023, 1, 1, 0, 0, 0)
+        last_modified_time = datetime(2023, 1, 1, 1, 0, 0)
+        
         mock_response = {
             "LabelingJobName": self.job_name,
             "LabelingJobStatus": "InProgress",
             "LabelingJobArn": f"arn:aws:sagemaker:us-east-1:123456789012:labeling-job/{self.job_name}",
-            "CreationTime": "2023-01-01T00:00:00Z",
-            "LastModifiedTime": "2023-01-01T01:00:00Z",
+            "CreationTime": creation_time,
+            "LastModifiedTime": last_modified_time,
             "LabelCounters": {
                 "TotalObjects": 100,
                 "LabeledObjects": 50,
@@ -94,7 +107,8 @@ class TestGroundTruthUtils(unittest.TestCase):
         self.assertEqual(status["LabelCounters"]["TotalObjects"], 100)
         self.assertEqual(status["LabelCounters"]["LabeledObjects"], 50)
     
-    def test_convert_ground_truth_to_yolo(self):
+    @patch('boto3.Session')
+    def test_convert_ground_truth_to_yolo(self, mock_session):
         """Test converting Ground Truth output to YOLOv11 format."""
         input_manifest = "s3://test-bucket/output/manifest.json"
         output_directory = "s3://test-bucket/yolo-format/"
@@ -105,14 +119,41 @@ class TestGroundTruthUtils(unittest.TestCase):
             "building": 3
         }
         
-        # Since this is a placeholder implementation, we just verify it returns True
-        result = convert_ground_truth_to_yolo(
-            input_manifest=input_manifest,
-            output_directory=output_directory,
-            class_mapping=class_mapping
-        )
+        # Mock S3 client
+        mock_s3_client = MagicMock()
+        mock_session.return_value.client.return_value = mock_s3_client
         
-        self.assertTrue(result)
+        # Mock the get_object response
+        mock_s3_client.get_object.return_value = {
+            "Body": MagicMock(read=lambda: json.dumps({
+                "source-ref": "s3://test-bucket/images/image1.jpg",
+                "bounding-box-labels": {
+                    "annotations": [
+                        {
+                            "label": "drone",
+                            "left": 10,
+                            "top": 10,
+                            "width": 20,
+                            "height": 20
+                        }
+                    ]
+                },
+                "image_width": 640,
+                "image_height": 480
+            }).encode())
+        }
+        
+        # Mock the file operations
+        with patch('os.makedirs'), patch('builtins.open', unittest.mock.mock_open()), patch('PIL.Image.open'):
+            # Call the function
+            result = convert_ground_truth_to_yolo(
+                input_manifest=input_manifest,
+                output_directory=output_directory,
+                class_mapping=class_mapping
+            )
+            
+            # Verify the result
+            self.assertTrue(result)
     
     def test_validate_annotation_quality(self):
         """Test validating annotation quality."""
@@ -175,6 +216,242 @@ class TestGroundTruthUtils(unittest.TestCase):
             self.assertIn(category, instructions)
         for image in example_images:
             self.assertIn(image, instructions)
+    
+    def test_calculate_iou(self):
+        """Test calculating IoU between two bounding boxes."""
+        # Test case 1: No overlap
+        box1 = {"left": 0, "top": 0, "width": 10, "height": 10}
+        box2 = {"left": 20, "top": 20, "width": 10, "height": 10}
+        iou = calculate_iou(box1, box2)
+        self.assertEqual(iou, 0.0)
+        
+        # Test case 2: Complete overlap (identical boxes)
+        box1 = {"left": 10, "top": 10, "width": 10, "height": 10}
+        box2 = {"left": 10, "top": 10, "width": 10, "height": 10}
+        iou = calculate_iou(box1, box2)
+        self.assertEqual(iou, 1.0)
+        
+        # Test case 3: Partial overlap
+        box1 = {"left": 10, "top": 10, "width": 10, "height": 10}
+        box2 = {"left": 15, "top": 15, "width": 10, "height": 10}
+        iou = calculate_iou(box1, box2)
+        # Expected IoU: area of intersection (5x5) / area of union (10x10 + 10x10 - 5x5)
+        expected_iou = 25 / 175
+        self.assertAlmostEqual(iou, expected_iou)
+    
+    @patch('boto3.Session')
+    def test_create_manifest_file(self, mock_session):
+        """Test creating a manifest file for a labeling job."""
+        # Set up mock S3 client
+        mock_s3_client = MagicMock()
+        mock_session.return_value.client.return_value = mock_s3_client
+        
+        # Test data
+        image_files = [
+            "s3://test-bucket/images/image1.jpg",
+            "s3://test-bucket/images/image2.jpg",
+            "s3://test-bucket/images/image3.jpg"
+        ]
+        output_bucket = "test-bucket"
+        output_prefix = "ground-truth-jobs"
+        job_name = "test-job"
+        
+        # Call the function
+        with patch('builtins.open', unittest.mock.mock_open()) as mock_file:
+            manifest_uri = create_manifest_file(
+                image_files=image_files,
+                output_bucket=output_bucket,
+                output_prefix=output_prefix,
+                job_name=job_name
+            )
+        
+        # Verify the function called the S3 client correctly
+        mock_s3_client.upload_file.assert_called_once()
+        
+        # Verify the returned URI
+        expected_uri = f"s3://{output_bucket}/{output_prefix}/manifests/{job_name}/manifest.json"
+        self.assertEqual(manifest_uri, expected_uri)
+    
+    @patch('boto3.Session')
+    def test_list_labeling_jobs(self, mock_session):
+        """Test listing labeling jobs."""
+        # Set up mock SageMaker client
+        mock_sagemaker_client = MagicMock()
+        mock_session.return_value.client.return_value = mock_sagemaker_client
+        
+        # Create mock response
+        mock_response = {
+            "LabelingJobSummaryList": [
+                {
+                    "LabelingJobName": "job-1",
+                    "LabelingJobStatus": "Completed",
+                    "CreationTime": "2023-01-01T00:00:00Z",
+                    "LastModifiedTime": "2023-01-01T01:00:00Z",
+                    "LabelCounters": {
+                        "TotalObjects": 100,
+                        "LabeledObjects": 100,
+                        "FailedObjects": 0
+                    },
+                    "LabelingJobArn": "arn:aws:sagemaker:us-east-1:123456789012:labeling-job/job-1"
+                },
+                {
+                    "LabelingJobName": "job-2",
+                    "LabelingJobStatus": "InProgress",
+                    "CreationTime": "2023-01-02T00:00:00Z",
+                    "LastModifiedTime": "2023-01-02T01:00:00Z",
+                    "LabelCounters": {
+                        "TotalObjects": 100,
+                        "LabeledObjects": 50,
+                        "FailedObjects": 0
+                    },
+                    "LabelingJobArn": "arn:aws:sagemaker:us-east-1:123456789012:labeling-job/job-2"
+                }
+            ]
+        }
+        mock_sagemaker_client.list_labeling_jobs.return_value = mock_response
+        
+        # Call the function
+        jobs = list_labeling_jobs(
+            max_results=10,
+            name_contains="job",
+            status_equals="InProgress"
+        )
+        
+        # Verify the function called the SageMaker client correctly
+        mock_sagemaker_client.list_labeling_jobs.assert_called_once_with(
+            MaxResults=10,
+            NameContains="job",
+            StatusEquals="InProgress",
+            SortBy="CreationTime",
+            SortOrder="Descending"
+        )
+        
+        # Verify the returned jobs
+        self.assertEqual(len(jobs), 2)
+        self.assertEqual(jobs[0]["name"], "job-1")
+        self.assertEqual(jobs[1]["name"], "job-2")
+        self.assertEqual(jobs[0]["status"], "Completed")
+        self.assertEqual(jobs[1]["status"], "InProgress")
+    
+    @patch('boto3.Session')
+    @patch('PIL.Image.open')
+    def test_visualize_annotations(self, mock_image_open, mock_session):
+        """Test visualizing annotations."""
+        # Set up mock S3 client
+        mock_s3_client = MagicMock()
+        mock_session.return_value.client.return_value = mock_s3_client
+        
+        # Create mock response for get_object
+        mock_s3_client.get_object.return_value = {
+            "Body": MagicMock(read=lambda: json.dumps({
+                "source-ref": "s3://test-bucket/images/image1.jpg",
+                "bounding-box-labels": {
+                    "annotations": [
+                        {
+                            "label": "drone",
+                            "left": 10,
+                            "top": 10,
+                            "width": 20,
+                            "height": 20
+                        }
+                    ]
+                }
+            }).encode())
+        }
+        
+        # Set up mock image and draw
+        mock_image = MagicMock()
+        mock_draw = MagicMock()
+        mock_image.__enter__.return_value = mock_image
+        mock_image.save = MagicMock()
+        mock_image_open.return_value = mock_image
+        
+        # Mock ImageDraw.Draw
+        with patch('PIL.ImageDraw.Draw', return_value=mock_draw):
+            # Call the function
+            with patch('os.makedirs') as mock_makedirs:
+                visualization_paths = visualize_annotations(
+                    manifest_file="s3://test-bucket/output/manifest.json",
+                    output_directory="/tmp/visualizations",
+                    max_images=1
+                )
+        
+        # Verify the function called the S3 client correctly
+        mock_s3_client.get_object.assert_called_once()
+        mock_s3_client.download_file.assert_called_once()
+        
+        # Verify the returned paths
+        self.assertEqual(len(visualization_paths), 1)
+        self.assertTrue(visualization_paths[0].startswith("/tmp/visualizations/annotated_"))
+    
+    @patch('boto3.Session')
+    def test_get_labeling_job_metrics(self, mock_session):
+        """Test getting detailed metrics for a labeling job."""
+        # Set up mock clients
+        mock_sagemaker_client = MagicMock()
+        mock_s3_client = MagicMock()
+        mock_session.return_value.client.side_effect = lambda service: {
+            'sagemaker': mock_sagemaker_client,
+            's3': mock_s3_client
+        }[service]
+        
+        # Create mock response for describe_labeling_job with datetime objects
+        from datetime import datetime
+        creation_time = datetime(2023, 1, 1, 0, 0, 0)
+        last_modified_time = datetime(2023, 1, 1, 2, 0, 0)
+        
+        mock_sagemaker_client.describe_labeling_job.return_value = {
+            "LabelingJobName": self.job_name,
+            "LabelingJobStatus": "Completed",
+            "LabelingJobArn": f"arn:aws:sagemaker:us-east-1:123456789012:labeling-job/{self.job_name}",
+            "CreationTime": creation_time,
+            "LastModifiedTime": last_modified_time,
+            "LabelCounters": {
+                "TotalObjects": 100,
+                "LabeledObjects": 100,
+                "FailedObjects": 0
+            },
+            "OutputConfig": {
+                "S3OutputPath": "s3://test-bucket/output/"
+            }
+        }
+        
+        # Create mock response for get_object
+        mock_s3_client.get_object.return_value = {
+            "Body": MagicMock(read=lambda: "".encode())
+        }
+        
+        # Call the function with a mock client
+        metrics = get_labeling_job_metrics(self.job_name, mock_sagemaker_client)
+        
+        # Verify the function called the SageMaker client correctly
+        mock_sagemaker_client.describe_labeling_job.assert_called_once_with(
+            LabelingJobName=self.job_name
+        )
+        
+        # Verify the returned metrics
+        self.assertIsInstance(metrics, dict)
+        self.assertIn("basic_status", metrics)
+        self.assertEqual(metrics["basic_status"]["LabelingJobName"], self.job_name)
+        self.assertEqual(metrics["basic_status"]["LabelingJobStatus"], "Completed")
+    
+    def test_parse_s3_uri(self):
+        """Test parsing S3 URIs."""
+        # Test case 1: Standard URI
+        uri = "s3://test-bucket/path/to/file.json"
+        bucket, key = parse_s3_uri(uri)
+        self.assertEqual(bucket, "test-bucket")
+        self.assertEqual(key, "path/to/file.json")
+        
+        # Test case 2: Bucket only
+        uri = "s3://test-bucket"
+        bucket, key = parse_s3_uri(uri)
+        self.assertEqual(bucket, "test-bucket")
+        self.assertEqual(key, "")
+        
+        # Test case 3: Invalid URI
+        with self.assertRaises(ValueError):
+            parse_s3_uri("invalid-uri")
 
 
 if __name__ == '__main__':

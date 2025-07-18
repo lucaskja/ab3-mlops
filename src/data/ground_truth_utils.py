@@ -1,14 +1,20 @@
 """
 Ground Truth utilities for creating, monitoring, and processing labeling jobs.
 
-This module provides utilities for:
+This module provides comprehensive utilities for:
 - Creating and configuring SageMaker Ground Truth labeling jobs
-- Monitoring job progress and status
-- Converting Ground Truth output to YOLOv11 format
-- Validating annotation quality
-- Estimating and controlling labeling costs
+- Monitoring job progress and status with detailed metrics
+- Converting Ground Truth output to YOLOv11 format for object detection
+- Validating annotation quality with customizable criteria
+- Estimating and controlling labeling costs with budget limits
 - Tracking job metrics and completion statistics
 - Managing cost control mechanisms for labeling jobs
+- Visualizing annotations and labeling results
+- Creating custom labeling instructions with templates
+- Managing labeling workforces and job submissions
+
+This module is designed to be used by Data Scientists in SageMaker Studio
+to easily create and manage labeling jobs for drone imagery object detection.
 """
 
 import boto3
@@ -1419,3 +1425,646 @@ def visualize_annotations(
             logger.warning(f"Could not visualize annotations for {image_uri}: {str(e)}")
     
     return visualized_images
+def validate_annotation_quality(
+    manifest_file: str,
+    validation_criteria: Dict[str, float],
+    region_name: str = "us-east-1"
+) -> Dict[str, Any]:
+    """
+    Validate the quality of annotations in a Ground Truth output manifest.
+    
+    Args:
+        manifest_file: S3 URI to the output manifest file
+        validation_criteria: Dictionary of validation criteria
+            - min_boxes_per_image: Minimum number of bounding boxes per image
+            - max_boxes_per_image: Maximum number of bounding boxes per image
+            - min_box_size: Minimum size of bounding box as fraction of image (area)
+            - max_box_overlap: Maximum allowed overlap between boxes (IoU)
+        region_name: AWS region name
+        
+    Returns:
+        Dictionary containing validation results
+    """
+    logger.info(f"Validating annotation quality for manifest: {manifest_file}")
+    logger.info(f"Using validation criteria: {validation_criteria}")
+    
+    # Initialize AWS clients
+    session = boto3.Session(profile_name='ab', region_name=region_name)
+    s3_client = session.client('s3')
+    
+    # Parse the S3 URI
+    bucket, key = parse_s3_uri(manifest_file)
+    
+    try:
+        # Download the manifest file
+        response = s3_client.get_object(Bucket=bucket, Key=key)
+        manifest_content = response['Body'].read().decode('utf-8')
+        
+        # Parse the manifest (each line is a JSON object)
+        annotations = []
+        for line in manifest_content.strip().split('\n'):
+            if line:
+                annotations.append(json.loads(line))
+        
+        # Initialize validation results
+        results = {
+            "total_images": len(annotations),
+            "total_annotations": 0,
+            "images_with_issues": 0,
+            "issues": [],
+            "pass_rate": 0.0,
+            "validation_criteria": validation_criteria
+        }
+        
+        # Process each annotation
+        for i, annotation in enumerate(annotations):
+            image_uri = annotation.get("source-ref", "")
+            image_filename = os.path.basename(image_uri) if image_uri else f"image_{i}"
+            
+            # Extract bounding box annotations
+            boxes = []
+            for key, value in annotation.items():
+                if key.endswith("-labels") and isinstance(value, dict) and "annotations" in value:
+                    for box in value["annotations"]:
+                        if "label" in box and "left" in box and "top" in box and "width" in box and "height" in box:
+                            boxes.append({
+                                "label": box["label"],
+                                "left": float(box["left"]),
+                                "top": float(box["top"]),
+                                "width": float(box["width"]),
+                                "height": float(box["height"])
+                            })
+            
+            # Update total annotations count
+            results["total_annotations"] += len(boxes)
+            
+            # Check number of boxes
+            image_issues = []
+            if len(boxes) < validation_criteria.get("min_boxes_per_image", 0):
+                image_issues.append(f"Too few boxes: {len(boxes)} < {validation_criteria.get('min_boxes_per_image', 0)}")
+            
+            if len(boxes) > validation_criteria.get("max_boxes_per_image", float('inf')):
+                image_issues.append(f"Too many boxes: {len(boxes)} > {validation_criteria.get('max_boxes_per_image', float('inf'))}")
+            
+            # Get image dimensions
+            img_width = annotation.get("image_width", 0)
+            img_height = annotation.get("image_height", 0)
+            
+            if img_width == 0 or img_height == 0:
+                # Try to extract dimensions from metadata
+                for key, value in annotation.items():
+                    if key.endswith("-metadata") and isinstance(value, dict):
+                        if "internal-dimensions" in value:
+                            dims = value["internal-dimensions"]
+                            img_width = dims.get("width", 0)
+                            img_height = dims.get("height", 0)
+            
+            # Check box sizes and overlaps
+            if img_width > 0 and img_height > 0:
+                image_area = img_width * img_height
+                min_box_size = validation_criteria.get("min_box_size", 0.0) * image_area
+                
+                # Check each box size
+                for j, box in enumerate(boxes):
+                    box_area = box["width"] * box["height"]
+                    if box_area < min_box_size:
+                        image_issues.append(f"Box {j} too small: {box_area/image_area:.4f} < {validation_criteria.get('min_box_size', 0.0)}")
+                
+                # Check box overlaps
+                max_overlap = validation_criteria.get("max_box_overlap", 1.0)
+                for j in range(len(boxes)):
+                    for k in range(j+1, len(boxes)):
+                        iou = calculate_iou(boxes[j], boxes[k])
+                        if iou > max_overlap:
+                            image_issues.append(f"Boxes {j} and {k} overlap too much: IoU = {iou:.4f} > {max_overlap}")
+            
+            # Add issues to results if any
+            if image_issues:
+                results["images_with_issues"] += 1
+                results["issues"].append({
+                    "image": image_filename,
+                    "issues": image_issues
+                })
+        
+        # Calculate pass rate
+        if results["total_images"] > 0:
+            results["pass_rate"] = (results["total_images"] - results["images_with_issues"]) / results["total_images"]
+        
+        logger.info(f"Validation complete: {results['pass_rate']*100:.2f}% of images passed validation")
+        logger.info(f"Found {results['images_with_issues']} images with issues out of {results['total_images']}")
+        
+        return results
+    
+    except Exception as e:
+        logger.error(f"Error validating annotations: {str(e)}")
+        return {
+            "error": str(e),
+            "total_images": 0,
+            "total_annotations": 0,
+            "images_with_issues": 0,
+            "issues": [],
+            "pass_rate": 0.0
+        }
+
+def calculate_iou(box1: Dict[str, float], box2: Dict[str, float]) -> float:
+    """
+    Calculate Intersection over Union (IoU) between two bounding boxes.
+    
+    Args:
+        box1: First bounding box with left, top, width, height
+        box2: Second bounding box with left, top, width, height
+        
+    Returns:
+        IoU value between 0 and 1
+    """
+    # Calculate box coordinates
+    box1_x1 = box1["left"]
+    box1_y1 = box1["top"]
+    box1_x2 = box1["left"] + box1["width"]
+    box1_y2 = box1["top"] + box1["height"]
+    
+    box2_x1 = box2["left"]
+    box2_y1 = box2["top"]
+    box2_x2 = box2["left"] + box2["width"]
+    box2_y2 = box2["top"] + box2["height"]
+    
+    # Calculate intersection area
+    x_left = max(box1_x1, box2_x1)
+    y_top = max(box1_y1, box2_y1)
+    x_right = min(box1_x2, box2_x2)
+    y_bottom = min(box1_y2, box2_y2)
+    
+    if x_right < x_left or y_bottom < y_top:
+        # No intersection
+        return 0.0
+    
+    intersection_area = (x_right - x_left) * (y_bottom - y_top)
+    
+    # Calculate union area
+    box1_area = (box1_x2 - box1_x1) * (box1_y2 - box1_y1)
+    box2_area = (box2_x2 - box2_x1) * (box2_y2 - box2_y1)
+    union_area = box1_area + box2_area - intersection_area
+    
+    # Calculate IoU
+    iou = intersection_area / union_area if union_area > 0 else 0.0
+    
+    return iou
+
+def estimate_labeling_cost(
+    num_images: int,
+    task_type: str = "BoundingBox",
+    worker_type: str = "private",
+    objects_per_image: float = 3.0
+) -> Dict[str, Any]:
+    """
+    Estimate the cost of a labeling job.
+    
+    Args:
+        num_images: Number of images to label
+        task_type: Type of labeling task
+        worker_type: Type of workforce
+        objects_per_image: Average number of objects per image
+        
+    Returns:
+        Dictionary containing cost estimates
+    """
+    logger.info(f"Estimating labeling cost for {num_images} images")
+    logger.info(f"Task type: {task_type}, Worker type: {worker_type}, Objects per image: {objects_per_image}")
+    
+    # Define base costs per image for different task types and worker types
+    # These are approximate costs and may vary
+    base_costs = {
+        "BoundingBox": {
+            "private": 0.0,  # Private workforce has no direct cost
+            "public": 0.036   # $0.036 per image for public workforce (example)
+        },
+        "ImageClassification": {
+            "private": 0.0,
+            "public": 0.012
+        },
+        "SemanticSegmentation": {
+            "private": 0.0,
+            "public": 0.072
+        }
+    }
+    
+    # Get the base cost per image
+    base_cost_per_image = base_costs.get(task_type, {}).get(worker_type, 0.0)
+    
+    # Calculate base cost
+    base_cost = base_cost_per_image * num_images
+    
+    # Adjust cost based on objects per image
+    # More objects typically means more time and potentially higher cost
+    if worker_type == "public" and objects_per_image > 1.0:
+        # Adjust cost based on number of objects
+        # This is a simplified model - actual costs may vary
+        adjustment_factor = min(2.0, 0.7 + (objects_per_image / 10.0))
+        adjusted_cost = base_cost * adjustment_factor
+    else:
+        adjustment_factor = 1.0
+        adjusted_cost = base_cost
+    
+    # Calculate AWS service costs (approximate)
+    # These include SageMaker Ground Truth service fees
+    service_cost = 0.0
+    if worker_type == "public":
+        # AWS adds a service fee on top of worker payments
+        service_cost = adjusted_cost * 0.12
+    
+    # Storage costs for input/output data (approximate)
+    # Assuming average image size of 2MB and annotation size of 5KB
+    avg_image_size_mb = 2.0
+    avg_annotation_size_mb = 0.005
+    storage_cost_per_gb_month = 0.023  # S3 Standard storage cost
+    
+    # Calculate storage size in GB
+    input_storage_gb = (num_images * avg_image_size_mb) / 1024
+    output_storage_gb = (num_images * avg_annotation_size_mb) / 1024
+    total_storage_gb = input_storage_gb + output_storage_gb
+    
+    # Calculate storage cost for 1 month
+    storage_cost = total_storage_gb * storage_cost_per_gb_month
+    
+    # Data transfer costs (approximate)
+    # Assuming all data is transferred within AWS
+    data_transfer_cost = 0.0
+    
+    # Calculate total cost
+    total_cost = adjusted_cost + service_cost + storage_cost + data_transfer_cost
+    
+    # Calculate cost per image
+    cost_per_image = total_cost / num_images if num_images > 0 else 0.0
+    
+    # Generate cost control recommendations
+    cost_control_recommendations = []
+    
+    if worker_type == "public" and num_images > 100:
+        cost_control_recommendations.append(
+            "Consider using a private workforce for large labeling jobs to reduce costs."
+        )
+    
+    if objects_per_image > 5.0:
+        cost_control_recommendations.append(
+            "Images with many objects may take longer to label. Consider simplifying the task or breaking it down."
+        )
+    
+    if total_cost > 1000:
+        cost_control_recommendations.append(
+            "For large jobs, consider labeling in batches to control costs and evaluate quality incrementally."
+        )
+    
+    # Create cost breakdown
+    cost_breakdown = {
+        "labeling_cost": adjusted_cost,
+        "service_cost": service_cost,
+        "storage_cost": storage_cost,
+        "data_transfer_cost": data_transfer_cost
+    }
+    
+    # Create result dictionary
+    result = {
+        "num_images": num_images,
+        "task_type": task_type,
+        "worker_type": worker_type,
+        "objects_per_image": objects_per_image,
+        "base_cost_per_image": base_cost_per_image,
+        "base_cost": base_cost,
+        "adjustment_factor": adjustment_factor,
+        "adjusted_cost": adjusted_cost,
+        "service_cost": service_cost,
+        "storage_cost": storage_cost,
+        "data_transfer_cost": data_transfer_cost,
+        "total_cost": total_cost,
+        "cost_per_image": cost_per_image,
+        "cost_breakdown": cost_breakdown,
+        "cost_control_recommendations": cost_control_recommendations
+    }
+    
+    logger.info(f"Estimated total cost: ${total_cost:.2f}")
+    logger.info(f"Cost per image: ${cost_per_image:.4f}")
+    
+    return result
+
+def create_labeling_instructions(
+    task_type: str,
+    categories: List[str],
+    example_images: List[str] = None,
+    detailed_instructions: bool = True
+) -> str:
+    """
+    Create HTML instructions for a labeling job.
+    
+    Args:
+        task_type: Type of labeling task
+        categories: List of label categories
+        example_images: List of example image URIs
+        detailed_instructions: Whether to include detailed instructions
+        
+    Returns:
+        HTML string with instructions
+    """
+    logger.info(f"Creating labeling instructions for {task_type} task")
+    logger.info(f"Categories: {categories}")
+    
+    # Create basic instructions
+    title = f"Drone Imagery {task_type} Instructions"
+    
+    # Create category list
+    category_list = "".join([f"<li><strong>{category}</strong></li>" for category in categories])
+    
+    # Create basic instructions
+    basic_instructions = f"""
+    <h1>{title}</h1>
+    <p>Please label all objects in the drone imagery according to the following categories:</p>
+    <ul>
+        {category_list}
+    </ul>
+    <p>Be as precise as possible when drawing bounding boxes around objects.</p>
+    """
+    
+    # Add detailed instructions if requested
+    if detailed_instructions:
+        if task_type == "BoundingBox":
+            detailed_content = """
+            <h2>Detailed Instructions</h2>
+            <h3>How to Draw Bounding Boxes</h3>
+            <ol>
+                <li>Click and drag to draw a box around each object</li>
+                <li>Make sure the box completely contains the object</li>
+                <li>Make the box as tight as possible around the object</li>
+                <li>If objects overlap, draw separate boxes for each object</li>
+                <li>If an object is partially visible, only label the visible part</li>
+                <li>If you're unsure about an object, label it with your best guess</li>
+            </ol>
+            
+            <h3>Tips for Accurate Labeling</h3>
+            <ul>
+                <li>Zoom in to see small objects more clearly</li>
+                <li>Take your time to ensure accuracy</li>
+                <li>If an object is cut off at the edge of the image, include the visible portion</li>
+                <li>If you make a mistake, you can delete a box and redraw it</li>
+            </ul>
+            """
+        elif task_type == "ImageClassification":
+            detailed_content = """
+            <h2>Detailed Instructions</h2>
+            <h3>How to Classify Images</h3>
+            <ol>
+                <li>Look at the entire image carefully</li>
+                <li>Select the most appropriate category for the image</li>
+                <li>If multiple categories apply, select the most prominent one</li>
+                <li>If you're unsure, select your best guess</li>
+            </ol>
+            
+            <h3>Tips for Accurate Classification</h3>
+            <ul>
+                <li>Take your time to examine the entire image</li>
+                <li>Consider the main subject of the image</li>
+                <li>If the image is unclear, make your best judgment</li>
+            </ul>
+            """
+        else:
+            detailed_content = ""
+    else:
+        detailed_content = ""
+    
+    # Add example images if provided
+    example_content = ""
+    if example_images and len(example_images) > 0:
+        example_list = "".join([f'<li><img src="{img}" alt="Example" style="max-width: 300px; margin: 10px;"></li>' for img in example_images])
+        example_content = f"""
+        <h2>Example Images</h2>
+        <p>Here are some examples of correctly labeled images:</p>
+        <ul style="list-style-type: none;">
+            {example_list}
+        </ul>
+        """
+    
+    # Combine all sections
+    instructions = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+        {basic_instructions}
+        {detailed_content}
+        {example_content}
+        
+        <h2>Thank You!</h2>
+        <p>Your careful labeling helps train accurate machine learning models for drone imagery analysis.</p>
+    </div>
+    """
+    
+    return instructions
+
+def create_manifest_file(
+    image_files: List[str],
+    output_bucket: str,
+    output_prefix: str,
+    job_name: str,
+    region_name: str = "us-east-1"
+) -> str:
+    """
+    Create a manifest file for a Ground Truth labeling job.
+    
+    Args:
+        image_files: List of S3 URIs to images
+        output_bucket: S3 bucket for output
+        output_prefix: S3 prefix for output
+        job_name: Name of the labeling job
+        region_name: AWS region name
+        
+    Returns:
+        S3 URI to the created manifest file
+    """
+    logger.info(f"Creating manifest file for {len(image_files)} images")
+    
+    # Initialize AWS clients
+    session = boto3.Session(profile_name='ab', region_name=region_name)
+    s3_client = session.client('s3')
+    
+    # Create a temporary file for the manifest
+    manifest_file = f"/tmp/manifest_{job_name}.json"
+    
+    # Create manifest content
+    with open(manifest_file, 'w') as f:
+        for image_uri in image_files:
+            # Create a JSON object for each image
+            manifest_entry = {
+                "source-ref": image_uri
+            }
+            f.write(json.dumps(manifest_entry) + '\n')
+    
+    # Upload the manifest file to S3
+    manifest_key = f"{output_prefix}/manifests/{job_name}/manifest.json"
+    s3_client.upload_file(manifest_file, output_bucket, manifest_key)
+    
+    # Clean up the temporary file
+    os.remove(manifest_file)
+    
+    # Return the S3 URI to the manifest file
+    manifest_uri = f"s3://{output_bucket}/{manifest_key}"
+    logger.info(f"Manifest file created at: {manifest_uri}")
+    
+    return manifest_uri
+
+def list_labeling_jobs(
+    max_results: int = 10,
+    name_contains: str = None,
+    status_equals: str = None,
+    sort_by: str = "CreationTime",
+    sort_order: str = "Descending",
+    region_name: str = "us-east-1"
+) -> List[Dict[str, Any]]:
+    """
+    List SageMaker Ground Truth labeling jobs.
+    
+    Args:
+        max_results: Maximum number of results to return
+        name_contains: Filter jobs by name containing this string
+        status_equals: Filter jobs by status (InProgress, Completed, Failed, Stopping, Stopped)
+        sort_by: Sort by field (CreationTime, LastModifiedTime)
+        sort_order: Sort order (Ascending, Descending)
+        region_name: AWS region name
+        
+    Returns:
+        List of labeling job metadata
+    """
+    logger.info(f"Listing labeling jobs (max: {max_results})")
+    
+    # Initialize AWS clients
+    session = boto3.Session(profile_name='ab', region_name=region_name)
+    sagemaker_client = session.client('sagemaker')
+    
+    # Create filter parameters
+    params = {
+        "MaxResults": max_results,
+        "SortBy": sort_by,
+        "SortOrder": sort_order
+    }
+    
+    if name_contains:
+        params["NameContains"] = name_contains
+    
+    if status_equals:
+        params["StatusEquals"] = status_equals
+    
+    # List labeling jobs
+    try:
+        response = sagemaker_client.list_labeling_jobs(**params)
+        
+        # Extract job metadata
+        jobs = []
+        for job in response.get("LabelingJobSummaryList", []):
+            jobs.append({
+                "name": job["LabelingJobName"],
+                "status": job["LabelingJobStatus"],
+                "creation_time": job["CreationTime"],
+                "last_modified_time": job["LastModifiedTime"],
+                "label_counters": job.get("LabelCounters", {}),
+                "failure_reason": job.get("FailureReason", None),
+                "job_arn": job["LabelingJobArn"]
+            })
+        
+        logger.info(f"Found {len(jobs)} labeling jobs")
+        return jobs
+    
+    except Exception as e:
+        logger.error(f"Error listing labeling jobs: {str(e)}")
+        return []
+
+def visualize_annotations(
+    manifest_file: str,
+    output_directory: str = "/tmp/visualizations",
+    max_images: int = 10,
+    region_name: str = "us-east-1"
+) -> List[str]:
+    """
+    Visualize annotations from a Ground Truth output manifest.
+    
+    Args:
+        manifest_file: S3 URI to the output manifest file
+        output_directory: Local directory to save visualizations
+        max_images: Maximum number of images to visualize
+        region_name: AWS region name
+        
+    Returns:
+        List of paths to visualization images
+    """
+    logger.info(f"Visualizing annotations from {manifest_file}")
+    
+    # Initialize AWS clients
+    session = boto3.Session(profile_name='ab', region_name=region_name)
+    s3_client = session.client('s3')
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(output_directory, exist_ok=True)
+    
+    # Parse the S3 URI
+    bucket, key = parse_s3_uri(manifest_file)
+    
+    try:
+        # Download the manifest file
+        response = s3_client.get_object(Bucket=bucket, Key=key)
+        manifest_content = response['Body'].read().decode('utf-8')
+        
+        # Parse the manifest (each line is a JSON object)
+        annotations = []
+        for line in manifest_content.strip().split('\n'):
+            if line:
+                annotations.append(json.loads(line))
+        
+        # Limit to max_images
+        annotations = annotations[:max_images]
+        
+        # Process each annotation
+        visualization_paths = []
+        for i, annotation in enumerate(annotations):
+            # Get the image URI
+            image_uri = annotation.get("source-ref", "")
+            if not image_uri:
+                logger.warning(f"No source-ref found in annotation {i}")
+                continue
+            
+            # Extract the image filename
+            image_bucket, image_key = parse_s3_uri(image_uri)
+            image_filename = os.path.basename(image_key)
+            
+            # Download the image
+            local_image_path = f"{output_directory}/{image_filename}"
+            s3_client.download_file(image_bucket, image_key, local_image_path)
+            
+            # Open the image
+            with Image.open(local_image_path) as img:
+                draw = ImageDraw.Draw(img)
+                
+                # Extract bounding box annotations
+                for key, value in annotation.items():
+                    if key.endswith("-labels") and isinstance(value, dict) and "annotations" in value:
+                        for box in value["annotations"]:
+                            if "label" in box and "left" in box and "top" in box and "width" in box and "height" in box:
+                                label = box["label"]
+                                left = float(box["left"])
+                                top = float(box["top"])
+                                width = float(box["width"])
+                                height = float(box["height"])
+                                
+                                # Draw the bounding box
+                                draw.rectangle(
+                                    [(left, top), (left + width, top + height)],
+                                    outline="red",
+                                    width=3
+                                )
+                                
+                                # Draw the label
+                                draw.text((left, top - 10), label, fill="red")
+                
+                # Save the annotated image
+                visualization_path = f"{output_directory}/annotated_{image_filename}"
+                img.save(visualization_path)
+                visualization_paths.append(visualization_path)
+        
+        logger.info(f"Created {len(visualization_paths)} visualization images")
+        return visualization_paths
+    
+    except Exception as e:
+        logger.error(f"Error visualizing annotations: {str(e)}")
+        return []
