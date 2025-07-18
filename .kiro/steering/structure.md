@@ -13,20 +13,25 @@
 │   └── environments/        # Environment-specific configurations
 ├── notebooks/               # Jupyter notebooks for development
 │   ├── data-exploration/    # Data analysis and profiling notebooks
+│   ├── data-labeling/       # Ground Truth labeling job notebooks
 │   ├── model-development/   # Model training and experimentation
 │   └── pipeline-development/ # Pipeline development notebooks
 ├── scripts/                 # Utility and setup scripts
-│   ├── setup/              # Environment and AWS setup scripts
-│   ├── preprocessing/      # Data preprocessing scripts
-│   └── training/           # Training execution scripts
+│   ├── monitoring/          # Model monitoring scripts
+│   ├── preprocessing/       # Data preprocessing scripts
+│   ├── setup/               # Environment and AWS setup scripts
+│   └── training/            # Training execution scripts
 ├── src/                    # Source code modules
 │   ├── data/               # Data processing and validation
 │   │   ├── data_profiler.py # Data profiling utilities
 │   │   ├── data_validator.py # Data validation utilities
+│   │   ├── ground_truth_utils.py # Ground Truth labeling utilities
 │   │   ├── s3_utils.py     # S3 access utilities
 │   │   └── yolo_preprocessor.py # YOLO data preprocessing
 │   ├── models/             # Model implementation modules
 │   │   └── yolov11_trainer.py # YOLOv11 training implementation
+│   ├── monitoring/         # Model monitoring modules
+│   │   └── drift_detection.py # Drift detection utilities
 │   └── pipeline/           # Pipeline orchestration modules
 │       ├── clarify_integration.py # SageMaker Clarify integration
 │       ├── error_recovery.py # Pipeline error handling
@@ -37,7 +42,10 @@
 │       ├── sagemaker_pipeline.py # SageMaker Pipeline implementation
 │       └── sagemaker_training.py # SageMaker training job management
 ├── tests/                  # Unit and integration tests
+│   ├── ground_truth/       # Tests for Ground Truth utilities
+│   │   └── test_ground_truth_utils.py # Tests for Ground Truth utilities
 │   ├── test_error_recovery.py # Tests for error recovery functionality
+│   ├── test_event_bridge_integration.py # Tests for EventBridge integration
 │   ├── test_mlflow_integration.py # Tests for MLFlow integration
 │   ├── test_yolo_preprocessor.py # Tests for YOLO preprocessing
 │   └── test_yolov11_trainer.py # Tests for YOLOv11 trainer
