@@ -1,10 +1,10 @@
 # MLOps SageMaker Demo
 
-A comprehensive MLOps demonstration using AWS SageMaker for YOLOv11 object detection on drone imagery, with governance, monitoring, and pipeline orchestration.
+A comprehensive MLOps demonstration using AWS SageMaker for YOLOv11 object detection on drone imagery, with governance, monitoring, and pipeline orchestration. This project follows the [AWS SageMaker MLOps reference implementation](https://github.com/aws-samples/amazon-sagemaker-from-idea-to-production) with enhancements for computer vision workloads.
 
 ## Architecture Overview
 
-This project implements a complete machine learning lifecycle from data ingestion to model deployment, with clear role separation between Data Scientists and ML Engineers.
+This project implements a complete machine learning lifecycle from data ingestion to model deployment, with clear role separation between Data Scientists and ML Engineers, following AWS best practices for MLOps.
 
 ```mermaid
 graph TB
@@ -58,19 +58,52 @@ graph TB
     IAM --> GroundTruth
     EventBridge --> Monitor
     CloudWatch --> Monitor
-```
-
-## Key Features
+```#
+# Key Features
 
 - **Data Management**: S3-based data access with validation and profiling
+- **Data Labeling**: Ground Truth integration for efficient dataset creation with automated YOLO format conversion
 - **Model Development**: YOLOv11 implementation for drone detection
 - **Pipeline Orchestration**: SageMaker Pipelines for automated workflows
 - **Experiment Tracking**: MLFlow integration for model versioning
 - **Monitoring**: Model performance and data drift monitoring
 - **Governance**: IAM role-based access control for different team roles
-- **Data Labeling**: Ground Truth integration for efficient dataset creation with automated YOLO format conversion
+- **Cost Optimization**: Resource tagging, spot instances, and auto-scaling
 
-## Project Structure
+## MLOps Workflow
+
+This project follows the six-step process outlined in the [AWS SageMaker MLOps reference implementation](https://github.com/aws-samples/amazon-sagemaker-from-idea-to-production):
+
+1. **Experiment in a notebook** - Initial development and experimentation with YOLOv11 for drone imagery
+2. **Scale with SageMaker processing jobs and Python SDK** - Moving computation to SageMaker for data preprocessing
+3. **Operationalize with ML pipeline and model registry** - Building automation with SageMaker Pipelines
+4. **Add a model building CI/CD pipeline** - Automating the model building process
+5. **Add a model deployment pipeline** - Automating model deployment with conditional steps
+6. **Add model and data monitoring** - Ensuring ongoing quality with Model Monitor and EventBridge alerts
+
+```mermaid
+sequenceDiagram
+    participant DS as Data Scientist
+    participant GT as Ground Truth
+    participant S3 as S3 Bucket
+    participant Pipeline as SageMaker Pipeline
+    participant Registry as Model Registry
+    participant Endpoint as SageMaker Endpoint
+    participant Monitor as Model Monitor
+    
+    DS->>S3: Upload raw images
+    DS->>GT: Create labeling job
+    GT->>S3: Store labeled data
+    S3->>Pipeline: Trigger pipeline execution
+    Pipeline->>Pipeline: Preprocess data
+    Pipeline->>Pipeline: Train YOLOv11 model
+    Pipeline->>Pipeline: Evaluate model
+    Pipeline->>Registry: Register model
+    Registry->>Endpoint: Deploy model
+    Endpoint->>Monitor: Configure monitoring
+    Monitor->>Monitor: Detect drift
+```## P
+roject Structure
 
 ```
 ├── configs/                 # Configuration files and infrastructure
@@ -144,29 +177,90 @@ pip install -r requirements.txt
 ./scripts/setup/deploy_iam_roles.sh
 ```
 
-### Role-Based Access
+6. Validate the IAM setup:
+```bash
+python scripts/setup/validate_iam_roles.py --profile ab
+```
 
-This project implements strict role separation:
+7. Deploy CDK infrastructure:
+```bash
+cd configs/cdk
+npm install
+cdk deploy --profile ab
+cd ../..
+```## G
+overnance and Role-Based Access Control
 
-#### Data Scientist Role
+This project implements strict role separation through IAM roles and policies:
+
+### Data Scientist Role
+
 - Read-only access to raw data in S3
 - Full access to SageMaker Studio notebooks
 - Access to MLFlow for experiment tracking
 - Permissions to create Ground Truth labeling jobs
+- No access to production resources
 
-#### ML Engineer Role
+```mermaid
+graph TB
+    subgraph "Data Scientist Role"
+        DS_S3[Read-only S3 Access]
+        DS_Studio[SageMaker Studio Access]
+        DS_MLFlow[MLFlow Access]
+        DS_GT[Ground Truth Access]
+    end
+    
+    subgraph "Resources"
+        S3[S3 Buckets]
+        Studio[SageMaker Studio]
+    end
+    
+    DS_S3 --> S3
+    DS_Studio --> Studio
+    DS_MLFlow --> Studio
+    DS_GT --> Studio
+```
+
+### ML Engineer Role
+
 - Full access to SageMaker Pipelines
 - Access to Model Registry and deployment resources
 - Permission to create and manage endpoints
 - Access to monitoring and production resources
 
-## Usage Guides
+```mermaid
+graph TB
+    subgraph "ML Engineer Role"
+        ML_S3[Read/Write S3 Access]
+        ML_Pipeline[Pipeline Access]
+        ML_Registry[Model Registry Access]
+        ML_Endpoints[Endpoint Management]
+        ML_Monitor[Monitoring Access]
+    end
+    
+    subgraph "Resources"
+        S3[S3 Buckets]
+        Pipeline[SageMaker Pipelines]
+        Registry[Model Registry]
+        Endpoints[SageMaker Endpoints]
+        Monitor[Model Monitor]
+    end
+    
+    ML_S3 --> S3
+    ML_Pipeline --> Pipeline
+    ML_Registry --> Registry
+    ML_Endpoints --> Endpoints
+    ML_Monitor --> Monitor
+```#
+# Usage Guides
 
 ### Data Scientists
 
 1. **Data Exploration**: Use notebooks in `notebooks/data-exploration/` to analyze the drone imagery dataset.
-2. **Data Labeling**: Create and manage Ground Truth labeling jobs using notebooks in `notebooks/data-labeling/` or run the example script in `examples/data-labeling/ground_truth_example.py`.
+2. **Data Labeling**: Create and manage Ground Truth labeling jobs using notebooks in `notebooks/data-labeling/`.
 3. **Model Development**: Experiment with YOLOv11 models using notebooks in `notebooks/model-development/`.
+
+For detailed instructions, see the [Data Scientist Guide](docs/user-guides/data_scientist_guide.md).
 
 ### ML Engineers
 
@@ -174,42 +268,106 @@ This project implements strict role separation:
 2. **Model Deployment**: Deploy models to endpoints using the deployment scripts.
 3. **Monitoring Setup**: Configure model monitoring using the monitoring modules.
 
-## MLOps Workflow
+For detailed instructions, see the [ML Engineer Guide](docs/user-guides/ml_engineer_guide.md).
 
-1. **Data Preparation**: Explore and profile the drone imagery dataset
-2. **Data Labeling**: Create Ground Truth labeling jobs for object detection
-3. **Model Development**: Train YOLOv11 models with experiment tracking
-4. **Pipeline Orchestration**: Automate the ML workflow with SageMaker Pipelines
-5. **Model Deployment**: Deploy models to SageMaker endpoints
-6. **Monitoring**: Set up drift detection and performance monitoring
-
-### Ground Truth Labeling Workflow
+## Ground Truth Labeling Workflow
 
 The project includes a comprehensive workflow for creating and managing SageMaker Ground Truth labeling jobs:
+
+```mermaid
+graph LR
+    A[Upload Images to S3] --> B[Create Labeling Job]
+    B --> C[Configure Annotation Task]
+    C --> D[Set Worker Type]
+    D --> E[Monitor Job Progress]
+    E --> F[Process Completed Labels]
+    F --> G[Convert to YOLOv11 Format]
+```
+
+To create a labeling job:
 
 ```bash
 # Run the Ground Truth example script
 python examples/data-labeling/ground_truth_example.py --bucket lucaskle-ab3-project-pv --prefix raw-images
 ```
 
-The Ground Truth labeling workflow includes:
+For more detailed control, use the interactive Jupyter notebook in `notebooks/data-labeling/create_labeling_job_interactive.ipynb`.#
+# SageMaker Pipeline Implementation
 
-1. **Manifest Creation**: Automatically generate manifest files for your images
-2. **Job Configuration**: Configure labeling jobs with custom categories and instructions
-3. **Job Monitoring**: Track labeling progress and completion metrics
-4. **Format Conversion**: Automatically convert Ground Truth output to YOLOv11 format
-5. **Cost Management**: Set budget limits and track labeling expenses
+The project implements a comprehensive SageMaker Pipeline for YOLOv11 training and deployment:
 
-For more detailed control, use the interactive Jupyter notebook in `notebooks/data-labeling/create_labeling_job.ipynb`.
+```mermaid
+graph LR
+    A[Data Preprocessing] --> B[Data Validation]
+    B --> C[Model Training]
+    C --> D[Model Evaluation]
+    D --> E[Model Registration]
+    E --> F[Conditional Deployment]
+    F --> G[Endpoint Configuration]
+    G --> H[Model Monitoring Setup]
+```
 
-## Cost Management
+To execute the pipeline:
 
-All AWS resources are tagged with the "ab" profile for cost allocation. To minimize costs:
+```python
+from src.pipeline.sagemaker_pipeline import create_training_pipeline
 
-- Use spot instances for training jobs where appropriate
-- Implement auto-scaling for inference endpoints
-- Schedule shutdown of development resources when not in use
-- Follow the cleanup procedures when resources are no longer needed
+# Create and execute the pipeline
+pipeline = create_training_pipeline(
+    pipeline_name="yolov11-training-pipeline",
+    role_arn="arn:aws:iam::123456789012:role/SageMakerExecutionRole",
+    preprocessing_instance_type="ml.m5.xlarge",
+    training_instance_type="ml.g4dn.xlarge"
+)
+
+execution = pipeline.start()
+```
+
+## Model Monitoring and Drift Detection
+
+The project implements comprehensive model monitoring using SageMaker Model Monitor:
+
+- **Data Quality Monitoring**: Detect drift in input data distributions
+- **Model Quality Monitoring**: Track model performance metrics over time
+- **Bias Monitoring**: Detect bias in model predictions using SageMaker Clarify
+- **Feature Attribution Drift**: Monitor changes in feature importance
+
+To set up monitoring:
+
+```python
+from src.pipeline.model_monitor import setup_model_monitoring
+
+# Set up model monitoring
+setup_model_monitoring(
+    endpoint_name="yolov11-endpoint",
+    baseline_dataset="s3://lucaskle-ab3-project-pv/baseline-data/",
+    monitoring_schedule_name="yolov11-monitoring-schedule"
+)
+```## Cost 
+Optimization
+
+This project implements several cost optimization strategies:
+
+1. **Spot Instances**: Use spot instances for training jobs to reduce costs by up to 90%
+2. **Auto-scaling**: Configure auto-scaling for inference endpoints to match demand
+3. **Resource Scheduling**: Automatically shut down development resources when not in use
+4. **Cost Monitoring**: Track costs using the "ab" AWS CLI profile and Cost Explorer
+
+```python
+# Example of spot instance configuration for training
+from sagemaker.estimator import EstimatorBase
+
+estimator = EstimatorBase(
+    role="SageMakerRole",
+    instance_count=1,
+    instance_type="ml.g4dn.xlarge",
+    use_spot_instances=True,  # Enable spot instances
+    max_wait=36000,  # Maximum time to wait for spot instances
+    max_run=3600,    # Maximum training time
+)
+```
+
+For detailed cost monitoring, use the cost tracking functions in `scripts/monitoring/cost_tracking.py`.
 
 ## Cleanup Procedures
 
@@ -219,7 +377,30 @@ To avoid ongoing costs, run the cleanup script when you're done:
 ./scripts/setup/cleanup_resources.sh
 ```
 
-This will terminate all AWS resources created by this project.
+This script will:
+
+1. Delete all SageMaker endpoints
+2. Terminate all SageMaker notebook instances
+3. Stop all SageMaker training jobs
+4. Delete all SageMaker models
+5. Delete all CloudWatch alarms
+6. Delete all EventBridge rules
+7. Delete all CloudFormation stacks
+
+Before running the cleanup script, verify that you want to delete all resources by running:
+
+```bash
+./scripts/setup/validate_cleanup.sh
+```## AWS 
+Documentation References
+
+For more information on the AWS services used in this project, refer to the following documentation:
+
+- [Implement MLOps with SageMaker](https://docs.aws.amazon.com/sagemaker/latest/dg/mlops.html)
+- [SageMaker Model Monitor](https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor-mlops.html)
+- [SageMaker Ground Truth](https://docs.aws.amazon.com/sagemaker/latest/dg/sms.html)
+- [SageMaker Pipelines](https://docs.aws.amazon.com/sagemaker/latest/dg/pipelines.html)
+- [SageMaker MLOps Project Templates](https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-projects-templates.html)
 
 ## Contributing
 
