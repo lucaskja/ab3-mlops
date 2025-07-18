@@ -110,6 +110,14 @@
 │   │   ├── ground_truth_utils.py # Ground Truth labeling utilities
 │   │   ├── s3_utils.py     # S3 access utilities
 │   │   └── yolo_preprocessor.py # YOLO data preprocessing
+│   ├── lambda_functions/   # AWS Lambda function implementations
+│   │   ├── drift_detection/ # Drift detection Lambda function
+│   │   │   └── lambda_function.py # Lambda handler for drift detection
+│   │   ├── model_approval/ # Model approval workflow Lambda function
+│   │   │   └── lambda_function.py # Lambda handler for model approval
+│   │   ├── scheduled_evaluation/ # Scheduled model evaluation Lambda function
+│   │   │   └── lambda_function.py # Lambda handler for scheduled evaluation
+│   │   └── utils.py        # Shared utilities for Lambda functions
 │   ├── models/             # Model implementation modules
 │   │   ├── __init__.py     # Package initialization
 │   │   └── yolov11_trainer.py # YOLOv11 training implementation
@@ -160,7 +168,8 @@
 - **Model Layer** (`src/models/`): Model implementations and utilities, focusing on YOLOv11
 - **Pipeline Layer** (`src/pipeline/`): Orchestration and workflow management with SageMaker Pipelines
 - **Monitoring Layer** (`src/monitoring/`): Drift detection, cost tracking, and model monitoring
-- **Automated Retraining** (`scripts/training/automated_retraining_trigger.py`): Automated model retraining based on drift detection
+- **Lambda Functions Layer** (`src/lambda_functions/`): AWS Lambda functions for drift detection, model evaluation, and approval workflows
+- **Automated Retraining** (`scripts/training/automated_retraining_trigger.py`): Setup script for automated model retraining infrastructure, including Lambda functions and EventBridge rules
 - **Testing Layer** (`tests/`): Unit and integration tests for all components
 - **Documentation Layer** (`docs/`): Architecture documentation and user guides
 - **Demo Layer** (`notebooks/demo/` and `scripts/demo/`): End-to-end workflow demonstrations for different user roles
@@ -197,6 +206,9 @@
 - **Mocking**: Use `unittest.mock` for external dependencies
 - **Setup/Teardown**: Use `setUp` and `tearDown` methods for test environment management
 - **Assertions**: Use appropriate assertion methods for different validation types
+- **Lambda Testing**: Mock AWS clients and test Lambda function creation and configuration
+- **File Operations**: Mock file operations for Lambda code loading and ZIP file creation
+- **AWS Resource Testing**: Test AWS resource creation and configuration with mocked responses
 
 ### Notebooks
 - **Purpose-Driven**: Each notebook has a specific analytical purpose
@@ -248,7 +260,11 @@
 ### Automated Retraining Workflow
 - **Drift Detection**: Configure Model Monitor with `DriftDetector` from `src.monitoring.drift_detection`
 - **EventBridge Rules**: Set up rules using `EventBridgeIntegration` from `src.pipeline.event_bridge_integration`
-- **Lambda Functions**: Create Lambda functions for drift detection and model evaluation
+- **Lambda Functions**: Use Lambda functions in `src.lambda_functions` directory:
+  - `drift_detection/lambda_function.py`: Detects data drift and triggers retraining
+  - `scheduled_evaluation/lambda_function.py`: Performs scheduled model evaluation
+  - `model_approval/lambda_function.py`: Handles model approval workflows
+- **Lambda Utilities**: Use `utils.py` for shared Lambda functionality like loading code and replacing placeholders
 - **Approval Workflow**: Implement approval workflows with SNS notifications
 - **Retraining Triggers**: Configure automated pipeline execution on drift detection
 
