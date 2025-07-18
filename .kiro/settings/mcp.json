@@ -45,7 +45,8 @@
       },
       "disabled": false,
       "autoApprove": [
-        "search_documentation"
+        "search_documentation",
+        "read_documentation"
       ]
     },
     "awslabs.frontend-mcp-server": {
