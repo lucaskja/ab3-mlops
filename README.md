@@ -58,10 +58,12 @@ graph TB
     IAM --> GroundTruth
     EventBridge --> Monitor
     CloudWatch --> Monitor
-```#
-# Key Features
+```
 
-- **Data Management**: S3-based data access with validation and profiling
+## Key Features
+
+- **Data Management**: S3-based data access with validation and comprehensive image profiling
+- **Data Profiling**: Advanced drone imagery analysis with quality metrics, recommendations, and visualization
 - **Data Labeling**: Ground Truth integration for efficient dataset creation with automated YOLO format conversion
 - **Model Development**: YOLOv11 implementation for drone detection
 - **Pipeline Orchestration**: SageMaker Pipelines for automated workflows
@@ -102,8 +104,9 @@ sequenceDiagram
     Registry->>Endpoint: Deploy model
     Endpoint->>Monitor: Configure monitoring
     Monitor->>Monitor: Detect drift
-```## P
-roject Structure
+```
+
+## Project Structure
 
 ```
 ├── configs/                 # Configuration files and infrastructure
@@ -133,6 +136,10 @@ roject Structure
 │   ├── data/                # Data processing and validation
 │   ├── models/              # Model implementation modules
 │   ├── pipeline/            # Pipeline orchestration modules
+│   │   ├── components/      # Pipeline component classes
+│   │   ├── templates/       # Script templates for pipeline steps
+│   │   ├── script_templates.py # Template manager for generating scripts
+│   │   └── ...              # Other pipeline modules
 │   └── monitoring/          # Monitoring and observability modules
 ├── tests/                   # Unit and integration tests
 ├── mlruns/                  # Local MLFlow tracking data
@@ -188,8 +195,9 @@ cd configs/cdk
 npm install
 cdk deploy --profile ab
 cd ../..
-```## G
-overnance and Role-Based Access Control
+```
+
+## Governance and Role-Based Access Control
 
 This project implements strict role separation through IAM roles and policies:
 
@@ -251,12 +259,15 @@ graph TB
     ML_Registry --> Registry
     ML_Endpoints --> Endpoints
     ML_Monitor --> Monitor
-```#
-# Usage Guides
+```
+
+## Usage Guides
 
 ### Data Scientists
 
 1. **Data Exploration**: Use notebooks in `notebooks/data-exploration/` to analyze the drone imagery dataset.
+   - Utilize the `DroneImageryProfiler` to analyze image characteristics, quality metrics, and get recommendations
+   - Generate comprehensive profile reports with resolution, brightness, contrast, sharpness, and color diversity metrics
 2. **Data Labeling**: Create and manage Ground Truth labeling jobs using notebooks in `notebooks/data-labeling/`.
 3. **Model Development**: Experiment with YOLOv11 models using notebooks in `notebooks/model-development/`.
 
@@ -269,6 +280,41 @@ For detailed instructions, see the [Data Scientist Guide](docs/user-guides/data_
 3. **Monitoring Setup**: Configure model monitoring using the monitoring modules.
 
 For detailed instructions, see the [ML Engineer Guide](docs/user-guides/ml_engineer_guide.md).
+
+## Data Profiling and Analysis
+
+The project includes a comprehensive `DroneImageryProfiler` for analyzing drone imagery datasets:
+
+```python
+from src.data.data_profiler import DroneImageryProfiler
+from src.data.s3_utils import S3DataAccess
+
+# Initialize S3 access and profiler
+s3_access = S3DataAccess(bucket_name="lucaskle-ab3-project-pv", profile_name="ab")
+profiler = DroneImageryProfiler(s3_access)
+
+# Profile images (with optional sampling)
+image_keys = s3_access.list_objects(prefix="raw-images/")
+profile_data = profiler.profile_images(image_keys, sample_size=100)
+
+# Generate human-readable report
+report = profiler.generate_profile_report(profile_data)
+print(report)
+
+# Get data quality recommendations
+recommendations = profiler.get_recommendations(profile_data)
+for rec in recommendations:
+    print(f"- {rec}")
+```
+
+The profiler analyzes:
+- Image dimensions and aspect ratios
+- File sizes and formats
+- Color modes and diversity
+- Brightness, contrast, and sharpness
+- Quality metrics and error rates
+
+Based on the analysis, it provides actionable recommendations for data preprocessing and model training optimization.
 
 ## Ground Truth Labeling Workflow
 
@@ -291,8 +337,9 @@ To create a labeling job:
 python examples/data-labeling/ground_truth_example.py --bucket lucaskle-ab3-project-pv --prefix raw-images
 ```
 
-For more detailed control, use the interactive Jupyter notebook in `notebooks/data-labeling/create_labeling_job_interactive.ipynb`.#
-# SageMaker Pipeline Implementation
+For more detailed control, use the interactive Jupyter notebook in `notebooks/data-labeling/create_labeling_job_interactive.ipynb`.
+
+## SageMaker Pipeline Implementation
 
 The project implements a comprehensive SageMaker Pipeline for YOLOv11 training and deployment:
 
@@ -307,20 +354,56 @@ graph LR
     G --> H[Model Monitoring Setup]
 ```
 
+### Template-Based Script Generation
+
+The pipeline uses a file-based template system for generating processing scripts. Templates are stored in the `src/pipeline/templates/` directory and loaded dynamically by the `ScriptTemplateManager`:
+
+```python
+from src.pipeline.script_templates import script_template_manager
+
+# Generate a preprocessing script with custom logic
+preprocessing_script = script_template_manager.generate_preprocessing_script(
+    preprocessing_logic="""
+    # Custom preprocessing logic for YOLOv11 format
+    import cv2
+    from glob import glob
+    
+    # Process images and annotations
+    image_files = glob(os.path.join(input_path, "*.jpg"))
+    for image_file in image_files:
+        # Process each image
+        img = cv2.imread(image_file)
+        # Apply preprocessing transformations
+        # ...
+    """,
+    additional_args='parser.add_argument("--image-size", type=int, default=640)',
+    kwargs_extraction='"image_size": args.image_size'
+)
+```
+
+This approach allows for flexible script generation while maintaining consistent structure and error handling.
+
 To execute the pipeline:
 
 ```python
-from src.pipeline.sagemaker_pipeline import create_training_pipeline
+from src.pipeline.sagemaker_pipeline_factory import PipelineFactory
 
-# Create and execute the pipeline
-pipeline = create_training_pipeline(
+# Create pipeline factory
+factory = PipelineFactory(aws_profile="ab", region="us-east-1")
+
+# Create complete pipeline
+pipeline = factory.create_complete_pipeline(
     pipeline_name="yolov11-training-pipeline",
-    role_arn="arn:aws:iam::123456789012:role/SageMakerExecutionRole",
-    preprocessing_instance_type="ml.m5.xlarge",
-    training_instance_type="ml.g4dn.xlarge"
+    preprocessing_script="scripts/preprocessing/preprocess_yolo_data.py",
+    training_script="scripts/training/train_yolov11.py",
+    evaluation_script="scripts/training/evaluate_model.py",
+    input_data="s3://lucaskle-ab3-project-pv/raw-data/",
+    model_name="yolov11-drone-detection",
+    instance_type_training="ml.g4dn.xlarge"
 )
 
-execution = pipeline.start()
+# Execute pipeline
+execution = factory.execute_pipeline(pipeline)
 ```
 
 ## Model Monitoring and Drift Detection
@@ -343,8 +426,9 @@ setup_model_monitoring(
     baseline_dataset="s3://lucaskle-ab3-project-pv/baseline-data/",
     monitoring_schedule_name="yolov11-monitoring-schedule"
 )
-```## Cost 
-Optimization
+```
+
+## Cost Optimization
 
 This project implements several cost optimization strategies:
 
@@ -369,6 +453,25 @@ estimator = EstimatorBase(
 
 For detailed cost monitoring, use the cost tracking functions in `scripts/monitoring/cost_tracking.py`.
 
+## Testing and Validation
+
+The project includes comprehensive unit and integration tests for all components:
+
+```bash
+# Run all tests
+python -m unittest discover tests
+
+# Run specific test file
+python -m unittest tests/test_data_profiler.py
+```
+
+Key test modules include:
+- `test_data_profiler.py`: Tests for the DroneImageryProfiler class
+- `test_yolo_preprocessor.py`: Tests for YOLO data preprocessing
+- `test_ground_truth_utils.py`: Tests for Ground Truth integration
+- `test_model_monitor.py`: Tests for model monitoring functionality
+- `test_drift_detection.py`: Tests for data drift detection
+
 ## Cleanup Procedures
 
 To avoid ongoing costs, run the cleanup script when you're done:
@@ -391,8 +494,9 @@ Before running the cleanup script, verify that you want to delete all resources 
 
 ```bash
 ./scripts/setup/validate_cleanup.sh
-```## AWS 
-Documentation References
+```
+
+## AWS Documentation References
 
 For more information on the AWS services used in this project, refer to the following documentation:
 
