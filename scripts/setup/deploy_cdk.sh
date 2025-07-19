@@ -89,13 +89,23 @@ fi
 
 # Deploy CDK stack
 echo "Deploying CDK stack..."
-npx cdk deploy $STACK_NAME \
-  --app "npx ts-node bin/app.ts" \
-  --parameters projectName=$PROJECT_NAME \
-  --parameters modelName=$MODEL_NAME \
-  --parameters sagemakerRoleArn=$SAGEMAKER_ROLE_ARN \
-  --parameters lambdaCodePath=$LAMBDA_CODE_PATH \
-  --require-approval never
+export LAMBDA_CODE_PATH=$LAMBDA_CODE_PATH
+
+# First try to synthesize the stack to check for errors
+echo "Synthesizing CDK stack to check for errors..."
+if npx cdk synth $STACK_NAME --app "npx ts-node bin/app.ts"; then
+  echo "CDK synthesis successful, proceeding with deployment..."
+  npx cdk deploy $STACK_NAME \
+    --app "npx ts-node bin/app.ts" \
+    --parameters projectName=$PROJECT_NAME \
+    --parameters modelName=$MODEL_NAME \
+    --parameters sagemakerRoleArn=$SAGEMAKER_ROLE_ARN \
+    --parameters lambdaCodePath=$LAMBDA_CODE_PATH \
+    --require-approval never
+else
+  echo "CDK synthesis failed. Skipping deployment."
+  exit 1
+fi
 
 # Get Lambda function ARN
 LAMBDA_ARN=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='DeployEndpointLambdaArn'].OutputValue" --output text)
