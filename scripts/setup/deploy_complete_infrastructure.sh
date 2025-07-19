@@ -178,7 +178,13 @@ bash "$SCRIPT_DIR/deploy_iam_roles.sh" --profile $AWS_PROFILE --stack-name "${PR
 # Validate IAM roles if not skipped
 if [ "$SKIP_VALIDATION" = false ]; then
     print_header "Validating IAM Roles"
-    $PYTHON "$SCRIPT_DIR/validate_iam_roles.py" --profile $AWS_PROFILE
+    # Check if validate_iam_roles.py exists
+    if [ -f "$SCRIPT_DIR/validate_iam_roles.py" ]; then
+        print_info "Running IAM role validation with virtual environment Python..."
+        $PYTHON "$SCRIPT_DIR/validate_iam_roles.py" --profile $AWS_PROFILE
+    else
+        print_warning "IAM role validation script not found. Skipping validation."
+    fi
 fi
 
 # Deploy CDK stacks
