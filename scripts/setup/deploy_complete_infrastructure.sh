@@ -10,6 +10,27 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Print with colors
+print_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_header() {
+    echo -e "\n${GREEN}========== $1 ==========${NC}\n"
+}
+
 # Check if venv exists
 if [ ! -d "venv" ]; then
     print_info "Creating virtual environment..."
@@ -32,27 +53,6 @@ else
     $PIP install boto3 sagemaker pandas matplotlib seaborn numpy PyYAML xmltodict
     print_success "Required packages installed"
 fi
-
-# Print with colors
-print_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-print_header() {
-    echo -e "\n${GREEN}========== $1 ==========${NC}\n"
-}
 
 # Get script directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
