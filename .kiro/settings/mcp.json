@@ -18,7 +18,9 @@
         "FASTMCP_LOG_LEVEL": "ERROR"
       },
       "disabled": false,
-      "autoApprove": []
+      "autoApprove": [
+        "prompt_understanding"
+      ]
     },
     "awslabs.cdk-mcp-server": {
       "command": "uvx",

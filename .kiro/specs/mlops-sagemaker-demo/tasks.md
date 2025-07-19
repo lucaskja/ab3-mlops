@@ -241,7 +241,7 @@ This implementation plan follows the six-step process outlined in the [AWS SageM
   - Set up automated testing in the CI/CD pipeline
   - _Requirements: 2.1, 2.3, 3.4_
 
-- [ ] 10. Deploy complete infrastructure to AWS account
+- [x] 10. Deploy complete infrastructure to AWS account
   - Execute CloudFormation stack deployment for IAM roles and policies
   - Deploy SageMaker Studio domain and user profiles with role-based access
   - Set up MLFlow tracking server on SageMaker or EC2

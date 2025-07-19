@@ -96,6 +96,27 @@ This project follows the six-step process outlined in the [AWS SageMaker MLOps r
 5. **Add a model deployment pipeline** - Automating model deployment with conditional steps
 6. **Add model and data monitoring** - Ensuring ongoing quality with Model Monitor and EventBridge alerts
 
+### Infrastructure Deployment
+
+The project includes a comprehensive infrastructure deployment script (`scripts/setup/deploy_complete_infrastructure.sh`) that automates the setup of all required AWS resources. This script follows a modular approach, allowing you to:
+
+- Deploy the complete infrastructure stack with a single command
+- Skip specific components (monitoring, MLFlow, EventBridge, etc.) as needed
+- Configure email notifications for alerts and monitoring
+- Validate the deployment with automated checks
+- Set up cost monitoring and budgets
+
+The script handles the deployment of:
+- IAM roles and policies for governance
+- CDK stacks for SageMaker endpoints and other resources
+- MLFlow tracking server on SageMaker
+- SageMaker Projects for CI/CD
+- Model deployment to SageMaker endpoints
+- Model monitoring with SageMaker Model Monitor
+- Explainability with SageMaker Clarify
+- EventBridge rules for alerts and notifications
+- Cost monitoring and budgets
+
 ```mermaid
 sequenceDiagram
     participant DS as Data Scientist
@@ -181,6 +202,16 @@ sequenceDiagram
 - Python 3.10+
 - Docker (for local development)
 
+### Dependencies
+
+The project uses a simplified set of core dependencies:
+- boto3 (≥1.28.0): AWS SDK for Python
+- sagemaker (≥2.190.0): Amazon SageMaker Python SDK
+- pandas (≥2.0.0): Data manipulation and analysis
+- matplotlib (≥3.7.0) & seaborn (≥0.12.0): Data visualization
+- numpy (≥1.24.0): Numerical computing
+- PyYAML (≥6.0) & xmltodict (≥0.13.0): Configuration and data parsing
+
 ### Environment Setup
 
 1. Clone the repository:
@@ -200,22 +231,62 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Configure AWS CLI with "ab" profile:
+> **Note:** The setup and deployment scripts now require a virtual environment named `venv` in the project root directory. The scripts will automatically check for this environment and use the Python interpreter from it.
+
+> **Note:** The setup and deployment scripts now require a virtual environment named `venv` in the project root directory. The scripts will automatically check for this environment and use the Python interpreter from it.
+
+#### Option 1: Complete Infrastructure Deployment (Recommended)
+
+Use the complete infrastructure deployment script to set up all required AWS resources in one go:
+
+```bash
+./scripts/setup/deploy_complete_infrastructure.sh --email your.email@example.com
+```
+
+This script will automatically check for the required `venv` virtual environment before proceeding.
+
+This script will automatically check for the required `venv` virtual environment before proceeding.
+
+This script will automatically check for the required `venv` virtual environment before proceeding.
+
+This script will:
+- Configure AWS CLI with the "ab" profile
+- Deploy IAM roles and policies
+- Deploy CDK stacks for endpoints and other resources
+- Set up MLFlow on SageMaker
+- Set up SageMaker Projects for CI/CD
+- Deploy a model to a SageMaker endpoint
+- Configure model monitoring and SageMaker Clarify
+- Set up EventBridge rules and SNS notifications
+- Configure cost monitoring and budgets
+- Validate the deployment
+
+You can customize the deployment with various options:
+
+```bash
+./scripts/setup/deploy_complete_infrastructure.sh --help
+```
+
+#### Option 2: Step-by-Step Manual Setup
+
+If you prefer to set up components individually:
+
+1. Configure AWS CLI with "ab" profile:
 ```bash
 ./scripts/setup/configure_aws.sh
 ```
 
-5. Deploy IAM roles and policies:
+2. Deploy IAM roles and policies:
 ```bash
 ./scripts/setup/deploy_iam_roles.sh
 ```
 
-6. Validate the IAM setup:
+3. Validate the IAM setup:
 ```bash
-python scripts/setup/validate_iam_roles.py --profile ab
+venv/bin/python scripts/setup/validate_iam_roles.py --profile ab
 ```
 
-7. Deploy CDK infrastructure:
+4. Deploy CDK infrastructure:
 ```bash
 cd configs/cdk
 npm install
@@ -223,9 +294,9 @@ cdk deploy --profile ab
 cd ../..
 ```
 
-8. Set up SageMaker Projects for CI/CD:
+5. Set up SageMaker Projects for CI/CD:
 ```bash
-python scripts/setup/setup_sagemaker_project.py --profile ab
+venv/bin/python scripts/setup/setup_sagemaker_project.py --profile ab
 ```
 
 ## Governance and Role-Based Access Control
@@ -366,7 +437,7 @@ To create a labeling job:
 
 ```bash
 # Run the Ground Truth example script
-python examples/data-labeling/ground_truth_example.py --bucket lucaskle-ab3-project-pv --prefix raw-images
+venv/bin/python examples/data-labeling/ground_truth_example.py --bucket lucaskle-ab3-project-pv --prefix raw-images
 ```
 
 For more detailed control, use the interactive Jupyter notebook in `notebooks/data-labeling/create_labeling_job_interactive.ipynb`.
@@ -502,7 +573,7 @@ To set up SageMaker Projects for CI/CD:
 
 ```bash
 # Set up SageMaker Project
-python scripts/setup/setup_sagemaker_project.py --profile ab
+venv/bin/python scripts/setup/setup_sagemaker_project.py --profile ab
 ```
 
 This script:
@@ -567,6 +638,7 @@ This project implements several cost optimization strategies:
 2. **Auto-scaling**: Configure auto-scaling for inference endpoints to match demand
 3. **Resource Scheduling**: Automatically shut down development resources when not in use
 4. **Cost Monitoring**: Track costs using the "ab" AWS CLI profile and Cost Explorer
+5. **Budget Alerts**: Set up budget thresholds and email notifications
 
 ```python
 # Example of spot instance configuration for training
@@ -582,7 +654,15 @@ estimator = EstimatorBase(
 )
 ```
 
-For detailed cost monitoring, use the cost tracking functions in `scripts/monitoring/cost_tracking.py`.
+For automated cost monitoring setup, use the `deploy_complete_infrastructure.sh` script with the email notification option:
+
+```bash
+./scripts/setup/deploy_complete_infrastructure.sh --email your.email@example.com
+```
+
+This will set up a cost monitoring dashboard and create a monthly budget with alerts when you reach 80% of your budget threshold.
+
+For detailed cost monitoring, use the cost tracking functions in `src/monitoring/cost_tracking.py`.
 
 ## Testing and Validation
 
@@ -590,10 +670,10 @@ The project includes comprehensive unit and integration tests for all components
 
 ```bash
 # Run all tests
-python -m unittest discover tests
+venv/bin/python -m unittest discover tests
 
 # Run specific test file
-python -m unittest tests/test_data_profiler.py
+venv/bin/python -m unittest tests/test_data_profiler.py
 ```
 
 Key test modules include:
@@ -656,7 +736,7 @@ These tests ensure that the pipeline components work together correctly and that
 To avoid ongoing costs, run the cleanup script when you're done:
 
 ```bash
-./scripts/setup/cleanup_resources.sh
+./scripts/setup/cleanup_resources.sh --profile ab
 ```
 
 This script will:
@@ -672,10 +752,16 @@ This script will:
 9. Delete all CodeBuild projects
 10. Delete all CodeCommit repositories
 
+You can customize the cleanup with various options:
+
+```bash
+./scripts/setup/cleanup_resources.sh --help
+```
+
 Before running the cleanup script, verify that you want to delete all resources by running:
 
 ```bash
-./scripts/setup/validate_cleanup.sh
+venv/bin/python scripts/setup/validate_cleanup.py --profile ab
 ```
 
 ## AWS Documentation References
