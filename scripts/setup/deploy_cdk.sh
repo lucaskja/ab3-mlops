@@ -50,9 +50,16 @@ export AWS_DEFAULT_REGION=$AWS_REGION
 
 # Load project configuration
 echo "Loading project configuration..."
-PROJECT_NAME=$(python3 -c "from configs.project_config import PROJECT_NAME; print(PROJECT_NAME)")
-MODEL_NAME=$(python3 -c "from configs.project_config import MODEL_NAME; print(MODEL_NAME)")
-SAGEMAKER_ROLE_ARN=$(python3 -c "from configs.project_config import get_config; print(get_config()['iam']['roles']['sagemaker_execution']['arn'])")
+# Use Python from venv if available
+if [ -f "$PROJECT_ROOT/venv/bin/python" ]; then
+    PYTHON="$PROJECT_ROOT/venv/bin/python"
+else
+    PYTHON="python3"
+fi
+
+PROJECT_NAME=$($PYTHON -c "from configs.project_config import PROJECT_NAME; print(PROJECT_NAME)")
+MODEL_NAME=$($PYTHON -c "from configs.project_config import MODEL_NAME; print(MODEL_NAME)")
+SAGEMAKER_ROLE_ARN=$($PYTHON -c "from configs.project_config import get_config; print(get_config()['iam']['roles']['sagemaker_execution']['arn'])")
 
 # Set stack name if not provided
 if [ -z "$STACK_NAME" ]; then
@@ -83,6 +90,7 @@ fi
 # Deploy CDK stack
 echo "Deploying CDK stack..."
 npx cdk deploy $STACK_NAME \
+  --app "npx ts-node bin/app.ts" \
   --parameters projectName=$PROJECT_NAME \
   --parameters modelName=$MODEL_NAME \
   --parameters sagemakerRoleArn=$SAGEMAKER_ROLE_ARN \
