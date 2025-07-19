@@ -173,7 +173,14 @@ bash "$SCRIPT_DIR/configure_aws.sh"
 
 # Deploy IAM roles
 print_header "Deploying IAM Roles and Policies"
-bash "$SCRIPT_DIR/deploy_iam_roles.sh" --profile $AWS_PROFILE --stack-name "${PROJECT_NAME}-iam-roles" --bucket $DATA_BUCKET_NAME
+bash "$SCRIPT_DIR/deploy_iam_roles.sh" --profile $AWS_PROFILE --stack-name "${PROJECT_NAME}-iam-roles" --bucket $DATA_BUCKET_NAME || {
+    ERROR_CODE=$?
+    if grep -q "No updates are to be performed" <<< "$(cat /tmp/deploy_iam_error 2>/dev/null)"; then
+        print_warning "No updates to be performed on the IAM stack. Continuing..."
+    else
+        print_error "IAM roles deployment failed with code $ERROR_CODE. Continuing with the rest of the deployment..."
+    fi
+}
 
 # Validate IAM roles if not skipped
 if [ "$SKIP_VALIDATION" = false ]; then

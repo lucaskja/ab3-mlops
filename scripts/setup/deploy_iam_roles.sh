@@ -119,11 +119,13 @@ deploy_stack() {
             --parameters ParameterKey=ProjectName,ParameterValue="$PROJECT_NAME" \
                         ParameterKey=DataBucketName,ParameterValue="$DATA_BUCKET_NAME" \
             --capabilities CAPABILITY_NAMED_IAM \
-            --profile "$AWS_PROFILE" || {
-                if [ $? -eq 255 ]; then
+            --profile "$AWS_PROFILE" 2> /tmp/deploy_iam_error || {
+                ERROR_CODE=$?
+                if [ $ERROR_CODE -eq 255 ] || grep -q "No updates are to be performed" /tmp/deploy_iam_error; then
                     print_warning "No updates to be performed on the stack"
                 else
                     print_error "Stack update failed"
+                    cat /tmp/deploy_iam_error >&2
                     exit 1
                 fi
             }
