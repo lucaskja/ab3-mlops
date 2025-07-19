@@ -471,6 +471,53 @@ Key test modules include:
 - `test_ground_truth_utils.py`: Tests for Ground Truth integration
 - `test_model_monitor.py`: Tests for model monitoring functionality
 - `test_drift_detection.py`: Tests for data drift detection
+- `test_pipeline_integration.py`: End-to-end tests for SageMaker Pipeline functionality
+
+### Pipeline Integration Testing
+
+The project includes comprehensive integration tests for the SageMaker Pipeline implementation in `tests/test_pipeline_integration.py`. These tests validate:
+
+1. **End-to-End Pipeline Execution**: Tests the complete pipeline workflow from creation to execution
+2. **Component Integration**: Verifies proper integration between preprocessing, training, and evaluation steps
+3. **Custom Pipeline Components**: Tests the ability to create pipelines with custom component configurations
+4. **Error Handling**: Validates pipeline error detection and reporting
+5. **MLFlow Integration**: Tests integration between SageMaker Pipelines and MLFlow tracking
+
+The tests use mocking to simulate AWS services, allowing for comprehensive testing without actual AWS resource creation:
+
+```python
+# Example of pipeline integration test
+def test_pipeline_component_integration(self):
+    """Test integration between pipeline components"""
+    # Create pipeline factory
+    factory = SageMakerPipelineFactory(
+        aws_profile="ab",
+        region="us-east-1",
+        config=self.config
+    )
+    
+    # Create preprocessing step
+    preprocessing_step = factory.create_preprocessing_step(
+        input_data="s3://test-bucket/input-data"
+    )
+    
+    # Create training step
+    training_step = factory.create_training_step(
+        preprocessed_data=preprocessing_step.get_output()
+    )
+    
+    # Create evaluation step
+    evaluation_step = factory.create_evaluation_step(
+        model=training_step.get_model(),
+        test_data=preprocessing_step.get_test_data_output()
+    )
+    
+    # Verify step dependencies
+    self.assertEqual(training_step.get_dependencies()[0], preprocessing_step.get_step())
+    self.assertEqual(evaluation_step.get_dependencies()[0], training_step.get_step())
+```
+
+These tests ensure that the pipeline components work together correctly and that the pipeline can handle various configurations and error conditions.
 
 ## Cleanup Procedures
 
