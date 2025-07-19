@@ -40,6 +40,13 @@ graph TB
         CloudWatch[CloudWatch Logs]
     end
     
+    subgraph "CI/CD"
+        Projects[SageMaker Projects]
+        CodePipeline[AWS CodePipeline]
+        CodeBuild[AWS CodeBuild]
+        CodeCommit[AWS CodeCommit]
+    end
+    
     S3 --> Studio
     Studio --> Notebooks
     Notebooks --> MLFlow
@@ -58,6 +65,11 @@ graph TB
     IAM --> GroundTruth
     EventBridge --> Monitor
     CloudWatch --> Monitor
+    Projects --> CodePipeline
+    CodePipeline --> CodeBuild
+    CodePipeline --> CodeCommit
+    Registry --> CodePipeline
+    CodePipeline --> Endpoints
 ```
 
 ## Key Features
@@ -71,6 +83,7 @@ graph TB
 - **Monitoring**: Model performance and data drift monitoring
 - **Governance**: IAM role-based access control for different team roles
 - **Cost Optimization**: Resource tagging, spot instances, and auto-scaling
+- **CI/CD Integration**: SageMaker Projects with CodePipeline for automated model building and deployment
 
 ## MLOps Workflow
 
@@ -90,6 +103,7 @@ sequenceDiagram
     participant S3 as S3 Bucket
     participant Pipeline as SageMaker Pipeline
     participant Registry as Model Registry
+    participant CI as CI/CD Pipeline
     participant Endpoint as SageMaker Endpoint
     participant Monitor as Model Monitor
     
@@ -101,7 +115,11 @@ sequenceDiagram
     Pipeline->>Pipeline: Train YOLOv11 model
     Pipeline->>Pipeline: Evaluate model
     Pipeline->>Registry: Register model
-    Registry->>Endpoint: Deploy model
+    Registry->>CI: Trigger deployment pipeline
+    CI->>CI: Deploy to staging
+    CI->>CI: Run tests
+    CI->>CI: Manual approval
+    CI->>Endpoint: Deploy to production
     Endpoint->>Monitor: Configure monitoring
     Monitor->>Monitor: Detect drift
 ```
@@ -113,6 +131,9 @@ sequenceDiagram
 │   ├── project_config.py    # Centralized project configuration
 │   ├── environment_config.py # Environment-specific configuration
 │   ├── cdk/                 # AWS CDK infrastructure code
+│   ├── sagemaker_projects/  # SageMaker Projects templates and seed code
+│   │   ├── templates/       # CloudFormation templates for SageMaker Projects
+│   │   └── seed_code/       # Seed code for model building and deployment
 │   └── environments/        # Environment-specific configurations
 ├── docs/                    # Comprehensive documentation
 │   ├── architecture/        # Architecture diagrams and descriptions
@@ -131,6 +152,11 @@ sequenceDiagram
 │   ├── setup/               # Environment and AWS setup scripts
 │   ├── preprocessing/       # Data preprocessing scripts
 │   ├── training/            # Training execution scripts
+│   │   ├── prepare_model_registration.py # Model registration preparation
+│   │   ├── train_yolov11.py # YOLOv11 training script
+│   │   ├── evaluate_model.py # Model evaluation script
+│   │   └── ...              # Other training scripts
+│   ├── deployment/          # Model deployment scripts
 │   └── monitoring/          # Monitoring and alerting scripts
 ├── src/                     # Source code modules
 │   ├── data/                # Data processing and validation
@@ -195,6 +221,11 @@ cd configs/cdk
 npm install
 cdk deploy --profile ab
 cd ../..
+```
+
+8. Set up SageMaker Projects for CI/CD:
+```bash
+python scripts/setup/setup_sagemaker_project.py --profile ab
 ```
 
 ## Governance and Role-Based Access Control
@@ -278,6 +309,7 @@ For detailed instructions, see the [Data Scientist Guide](docs/user-guides/data_
 1. **Pipeline Development**: Create and modify SageMaker Pipelines using code in `src/pipeline/`.
 2. **Model Deployment**: Deploy models to endpoints using the deployment scripts.
 3. **Monitoring Setup**: Configure model monitoring using the monitoring modules.
+4. **CI/CD Management**: Manage SageMaker Projects and CI/CD pipelines for automated model building and deployment.
 
 For detailed instructions, see the [ML Engineer Guide](docs/user-guides/ml_engineer_guide.md).
 
@@ -354,6 +386,33 @@ graph LR
     G --> H[Model Monitoring Setup]
 ```
 
+### Model Registration Process
+
+The model registration process prepares models for the SageMaker Model Registry with evaluation metrics and approval status:
+
+```python
+# Example of model registration preparation
+from scripts.training.prepare_model_registration import prepare_model_registration
+
+# Prepare model for registration
+model_package_info = prepare_model_registration({
+    'profile': 'ab',
+    'model_info': 'model_info.json',
+    'evaluation_results': 'evaluation_results.json',
+    'output': 'model_package_info.json'
+})
+
+# The model_package_info contains:
+# - model_name: Name of the trained model
+# - model_artifact_path: S3 path to model artifacts
+# - inference_image: Docker image for inference
+# - model_metrics: Performance metrics (mAP, precision, recall)
+# - approval_status: Set to 'PendingManualApproval' by default
+# - created_at: Timestamp of creation
+```
+
+This process ensures that all models are registered with consistent metadata and performance metrics, enabling proper governance and approval workflows.
+
 ### Template-Based Script Generation
 
 The pipeline uses a file-based template system for generating processing scripts. Templates are stored in the `src/pipeline/templates/` directory and loaded dynamically by the `ScriptTemplateManager`:
@@ -405,6 +464,78 @@ pipeline = factory.create_complete_pipeline(
 # Execute pipeline
 execution = factory.execute_pipeline(pipeline)
 ```
+
+## CI/CD with SageMaker Projects
+
+The project implements CI/CD using SageMaker Projects, which provides automated model building and deployment pipelines:
+
+```mermaid
+graph TB
+    subgraph "Model Building Pipeline"
+        Source[Source Code Repository]
+        Build[Build Model]
+        Test[Test Model]
+        Register[Register Model]
+    end
+    
+    subgraph "Model Deployment Pipeline"
+        ModelSource[Model Source]
+        StagingDeploy[Deploy to Staging]
+        StagingTest[Test in Staging]
+        Approval[Manual Approval]
+        ProdDeploy[Deploy to Production]
+    end
+    
+    Source --> Build
+    Build --> Test
+    Test --> Register
+    Register --> ModelSource
+    ModelSource --> StagingDeploy
+    StagingDeploy --> StagingTest
+    StagingTest --> Approval
+    Approval --> ProdDeploy
+```
+
+### Setting Up SageMaker Projects
+
+To set up SageMaker Projects for CI/CD:
+
+```bash
+# Set up SageMaker Project
+python scripts/setup/setup_sagemaker_project.py --profile ab
+```
+
+This script:
+1. Creates seed code zip files for model building and deployment
+2. Uploads templates and seed code to S3
+3. Creates Service Catalog products for model building and deployment
+4. Creates a SageMaker Project that uses these products
+
+### Model Building Pipeline
+
+The model building pipeline:
+1. Pulls code from a CodeCommit repository
+2. Builds the model using SageMaker Pipelines
+3. Tests the model against quality thresholds
+4. Prepares model registration information with evaluation metrics
+5. Registers the model in the SageMaker Model Registry with approval status
+
+### Model Deployment Pipeline
+
+The model deployment pipeline:
+1. Pulls the latest approved model from the Model Registry
+2. Deploys the model to a staging endpoint
+3. Tests the model in the staging environment
+4. Requires manual approval for production deployment
+5. Deploys the model to the production endpoint
+
+### CI/CD Workflow
+
+The CI/CD workflow is triggered by:
+1. Code changes in the model building repository
+2. New approved models in the Model Registry
+
+This ensures that both code changes and model updates flow through the CI/CD pipeline, maintaining quality and governance.
 
 ## Model Monitoring and Drift Detection
 
@@ -472,6 +603,7 @@ Key test modules include:
 - `test_model_monitor.py`: Tests for model monitoring functionality
 - `test_drift_detection.py`: Tests for data drift detection
 - `test_pipeline_integration.py`: End-to-end tests for SageMaker Pipeline functionality
+- `test_endpoint_performance.py`: Tests for endpoint performance and latency
 
 ### Pipeline Integration Testing
 
@@ -536,6 +668,9 @@ This script will:
 5. Delete all CloudWatch alarms
 6. Delete all EventBridge rules
 7. Delete all CloudFormation stacks
+8. Delete all CodePipeline pipelines
+9. Delete all CodeBuild projects
+10. Delete all CodeCommit repositories
 
 Before running the cleanup script, verify that you want to delete all resources by running:
 
@@ -552,6 +687,10 @@ For more information on the AWS services used in this project, refer to the foll
 - [SageMaker Ground Truth](https://docs.aws.amazon.com/sagemaker/latest/dg/sms.html)
 - [SageMaker Pipelines](https://docs.aws.amazon.com/sagemaker/latest/dg/pipelines.html)
 - [SageMaker MLOps Project Templates](https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-projects-templates.html)
+- [SageMaker Projects](https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-projects.html)
+- [AWS CodePipeline](https://docs.aws.amazon.com/codepipeline/latest/userguide/welcome.html)
+- [AWS CodeBuild](https://docs.aws.amazon.com/codebuild/latest/userguide/welcome.html)
+- [AWS CodeCommit](https://docs.aws.amazon.com/codecommit/latest/userguide/welcome.html)
 
 ## Contributing
 

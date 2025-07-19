@@ -1,0 +1,273 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SageMaker Project template for YOLOv11 model deployment pipeline'
+
+Parameters:
+  SageMakerProjectName:
+    Type: String
+    Description: Name of the SageMaker project
+    MinLength: 1
+    MaxLength: 32
+    AllowedPattern: ^[a-zA-Z](-*[a-zA-Z0-9])*
+  
+  SageMakerProjectId:
+    Type: String
+    Description: Service generated ID of the project
+  
+  ModelDeployCodeRepositoryName:
+    Type: String
+    Description: Name of the CodeCommit repository for model deployment
+    Default: 'mlops-sagemaker-demo-model-deploy'
+  
+  ModelPackageGroupName:
+    Type: String
+    Description: Name of the model package group
+    Default: 'mlops-sagemaker-demo-models'
+  
+  StagingEndpointName:
+    Type: String
+    Description: Name of the staging endpoint
+    Default: 'mlops-sagemaker-demo-staging'
+  
+  ProductionEndpointName:
+    Type: String
+    Description: Name of the production endpoint
+    Default: 'mlops-sagemaker-demo-prod'
+
+Resources:
+  ModelDeployCodeRepository:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Sub ${ModelDeployCodeRepositoryName}-${SageMakerProjectId}
+      RepositoryDescription: !Sub 'Repository for the ${SageMakerProjectName} project model deployment code'
+      Code:
+        S3:
+          Bucket: !Sub 'lucaskle-ab3-project-pv'
+          Key: 'sagemaker-projects/seed-code/model-deploy-seed.zip'
+        BranchName: main
+
+  ModelDeployCodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonECR-FullAccess'
+
+  ModelDeployCodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/AWSCodeStarFullAccess'
+
+  StagingDeployProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub sagemaker-${SageMakerProjectName}-${SageMakerProjectId}-staging-deploy
+      ServiceRole: !GetAtt ModelDeployCodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: SAGEMAKER_PROJECT_NAME
+            Value: !Ref SageMakerProjectName
+          - Name: SAGEMAKER_PROJECT_ID
+            Value: !Ref SageMakerProjectId
+          - Name: MODEL_PACKAGE_GROUP_NAME
+            Value: !Ref ModelPackageGroupName
+          - Name: ENDPOINT_NAME
+            Value: !Ref StagingEndpointName
+          - Name: ENDPOINT_TYPE
+            Value: 'staging'
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_PROFILE
+            Value: 'ab'
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: staging-buildspec.yml
+
+  StagingTestProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub sagemaker-${SageMakerProjectName}-${SageMakerProjectId}-staging-test
+      ServiceRole: !GetAtt ModelDeployCodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: SAGEMAKER_PROJECT_NAME
+            Value: !Ref SageMakerProjectName
+          - Name: SAGEMAKER_PROJECT_ID
+            Value: !Ref SageMakerProjectId
+          - Name: ENDPOINT_NAME
+            Value: !Ref StagingEndpointName
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_PROFILE
+            Value: 'ab'
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: staging-test-buildspec.yml
+
+  ProductionDeployProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub sagemaker-${SageMakerProjectName}-${SageMakerProjectId}-prod-deploy
+      ServiceRole: !GetAtt ModelDeployCodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: SAGEMAKER_PROJECT_NAME
+            Value: !Ref SageMakerProjectName
+          - Name: SAGEMAKER_PROJECT_ID
+            Value: !Ref SageMakerProjectId
+          - Name: MODEL_PACKAGE_GROUP_NAME
+            Value: !Ref ModelPackageGroupName
+          - Name: ENDPOINT_NAME
+            Value: !Ref ProductionEndpointName
+          - Name: ENDPOINT_TYPE
+            Value: 'production'
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_PROFILE
+            Value: 'ab'
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: prod-buildspec.yml
+
+  ModelDeployPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub sagemaker-${SageMakerProjectName}-${SageMakerProjectId}-modeldeploy
+      RoleArn: !GetAtt ModelDeployCodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Sub sagemaker-project-${SageMakerProjectId}
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: '1'
+              Configuration:
+                RepositoryName: !GetAtt ModelDeployCodeRepository.Name
+                BranchName: main
+                PollForSourceChanges: false
+              OutputArtifacts:
+                - Name: SourceCode
+            
+            - Name: ModelSource
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              Configuration:
+                ConnectionArn: !Sub 'arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/sagemaker-project-connection'
+                FullRepositoryId: !Sub '${ModelPackageGroupName}-${SageMakerProjectId}'
+                BranchName: main
+              OutputArtifacts:
+                - Name: ModelSourceCode
+        
+        - Name: StagingDeploy
+          Actions:
+            - Name: DeployToStaging
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref StagingDeployProject
+              InputArtifacts:
+                - Name: SourceCode
+                - Name: ModelSourceCode
+              OutputArtifacts:
+                - Name: StagingDeployOutput
+        
+        - Name: StagingTest
+          Actions:
+            - Name: TestStagingEndpoint
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref StagingTestProject
+              InputArtifacts:
+                - Name: StagingDeployOutput
+              OutputArtifacts:
+                - Name: StagingTestOutput
+        
+        - Name: ApproveProduction
+          Actions:
+            - Name: ManualApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: '1'
+              Configuration:
+                CustomData: !Sub 'Approve deployment of model to production endpoint ${ProductionEndpointName}'
+        
+        - Name: ProductionDeploy
+          Actions:
+            - Name: DeployToProduction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref ProductionDeployProject
+              InputArtifacts:
+                - Name: StagingTestOutput
+                - Name: ModelSourceCode
+              OutputArtifacts:
+                - Name: ProductionDeployOutput
+
+Outputs:
+  ModelDeployCodeRepositoryName:
+    Value: !GetAtt ModelDeployCodeRepository.Name
+  
+  StagingEndpointName:
+    Value: !Ref StagingEndpointName
+  
+  ProductionEndpointName:
+    Value: !Ref ProductionEndpointName
+  
+  ModelDeployPipelineName:
+    Value: !Ref ModelDeployPipeline

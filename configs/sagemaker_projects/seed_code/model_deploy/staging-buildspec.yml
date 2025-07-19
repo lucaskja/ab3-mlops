@@ -1,0 +1,47 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+    commands:
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+      - pip install boto3 sagemaker
+
+  pre_build:
+    commands:
+      - echo "Setting up AWS profile"
+      - aws configure set region $AWS_REGION --profile $AWS_PROFILE
+      - echo "Checking environment variables"
+      - echo "SAGEMAKER_PROJECT_NAME: $SAGEMAKER_PROJECT_NAME"
+      - echo "SAGEMAKER_PROJECT_ID: $SAGEMAKER_PROJECT_ID"
+      - echo "MODEL_PACKAGE_GROUP_NAME: $MODEL_PACKAGE_GROUP_NAME"
+      - echo "ENDPOINT_NAME: $ENDPOINT_NAME"
+      - echo "ENDPOINT_TYPE: $ENDPOINT_TYPE"
+
+  build:
+    commands:
+      - echo "Fetching latest approved model from Model Registry"
+      - python scripts/deployment/get_approved_model.py --profile $AWS_PROFILE --model-package-group-name "$MODEL_PACKAGE_GROUP_NAME-$SAGEMAKER_PROJECT_ID" --output approved_model.json
+      - echo "Deploying model to staging endpoint"
+      - python scripts/deployment/deploy_model.py --profile $AWS_PROFILE --model-info approved_model.json --endpoint-name "$ENDPOINT_NAME-$SAGEMAKER_PROJECT_ID" --endpoint-type $ENDPOINT_TYPE --instance-type ml.g4dn.xlarge --instance-count 1
+
+  post_build:
+    commands:
+      - echo "Setting up model monitoring"
+      - python scripts/monitoring/setup_model_monitoring.py --profile $AWS_PROFILE --endpoint-name "$ENDPOINT_NAME-$SAGEMAKER_PROJECT_ID" --monitoring-schedule-name "$ENDPOINT_NAME-$SAGEMAKER_PROJECT_ID-monitoring"
+      - echo "Staging deployment completed on `date`"
+
+artifacts:
+  files:
+    - approved_model.json
+    - endpoint_info.json
+    - monitoring_info.json
+    - requirements.txt
+    - staging-buildspec.yml
+    - staging-test-buildspec.yml
+    - prod-buildspec.yml
+    - scripts/**/*
+    - src/**/*
+  discard-paths: no

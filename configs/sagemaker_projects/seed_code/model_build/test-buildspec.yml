@@ -1,0 +1,45 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+    commands:
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+      - pip install pytest pytest-cov
+
+  pre_build:
+    commands:
+      - echo "Setting up AWS profile"
+      - aws configure set region $AWS_REGION --profile $AWS_PROFILE
+      - echo "Checking environment variables"
+      - echo "SAGEMAKER_PROJECT_NAME: $SAGEMAKER_PROJECT_NAME"
+      - echo "SAGEMAKER_PROJECT_ID: $SAGEMAKER_PROJECT_ID"
+      - echo "MODEL_PACKAGE_GROUP_NAME: $MODEL_PACKAGE_GROUP_NAME"
+
+  build:
+    commands:
+      - echo "Running unit tests"
+      - python -m pytest tests/ --cov=src --cov-report=xml --cov-report=term
+      - echo "Running model evaluation"
+      - python scripts/training/evaluate_model.py --profile $AWS_PROFILE --model-info model_info.json --output evaluation_results.json
+      - echo "Checking model performance against thresholds"
+      - python -c "import json; results = json.load(open('evaluation_results.json')); assert results['mAP_0.5'] > 0.75, 'Model performance below threshold'"
+
+  post_build:
+    commands:
+      - echo "Model testing completed on `date`"
+      - echo "Preparing model for registration"
+      - python scripts/training/prepare_model_registration.py --profile $AWS_PROFILE --model-info model_info.json --evaluation-results evaluation_results.json --output model_package_info.json
+
+artifacts:
+  files:
+    - pipeline_execution_id.txt
+    - model_info.json
+    - evaluation_results.json
+    - model_package_info.json
+    - requirements.txt
+    - buildspec.yml
+    - test-buildspec.yml
+  discard-paths: no

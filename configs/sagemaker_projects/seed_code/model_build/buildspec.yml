@@ -1,0 +1,44 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+    commands:
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+      - pip install pytest pytest-cov
+
+  pre_build:
+    commands:
+      - echo "Setting up AWS profile"
+      - aws configure set region $AWS_REGION --profile $AWS_PROFILE
+      - echo "Checking environment variables"
+      - echo "SAGEMAKER_PROJECT_NAME: $SAGEMAKER_PROJECT_NAME"
+      - echo "SAGEMAKER_PROJECT_ID: $SAGEMAKER_PROJECT_ID"
+      - echo "MODEL_PACKAGE_GROUP_NAME: $MODEL_PACKAGE_GROUP_NAME"
+
+  build:
+    commands:
+      - echo "Running pipeline to create model"
+      - python scripts/training/create_sagemaker_pipeline.py --profile $AWS_PROFILE --pipeline-name "$SAGEMAKER_PROJECT_NAME-$SAGEMAKER_PROJECT_ID" --model-package-group-name "$MODEL_PACKAGE_GROUP_NAME-$SAGEMAKER_PROJECT_ID"
+      - echo "Executing pipeline"
+      - python scripts/training/complete_pipeline_orchestration.py --profile $AWS_PROFILE --pipeline-name "$SAGEMAKER_PROJECT_NAME-$SAGEMAKER_PROJECT_ID" --execution-id "$SAGEMAKER_PROJECT_NAME-$SAGEMAKER_PROJECT_ID-$(date +%Y%m%d%H%M%S)"
+
+  post_build:
+    commands:
+      - echo "Pipeline execution started"
+      - echo "Build completed on `date`"
+
+artifacts:
+  files:
+    - pipeline_execution_id.txt
+    - model_info.json
+    - evaluation_metrics.json
+    - requirements.txt
+    - buildspec.yml
+    - test-buildspec.yml
+    - scripts/**/*
+    - src/**/*
+    - tests/**/*
+  discard-paths: no

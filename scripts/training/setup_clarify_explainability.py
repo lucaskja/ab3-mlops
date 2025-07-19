@@ -1,101 +1,104 @@
 #!/usr/bin/env python3
 """
-Setup SageMaker Clarify Explainability
-
-This script sets up SageMaker Clarify for model explainability and bias detection
-on an existing SageMaker endpoint.
-
-Requirements addressed:
-- 5.4: Generate monitoring reports accessible through SageMaker Clarify
+Script to set up SageMaker Clarify explainability for a model endpoint.
 """
 
 import argparse
-import logging
 import json
-import sys
-from typing import Dict, Any, List, Optional
+import boto3
+import logging
+from datetime import datetime
 
-from src.pipeline.model_monitor_integration import add_clarify_to_endpoint
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-def parse_arguments():
+def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Setup SageMaker Clarify for model explainability")
-    
-    parser.add_argument("--endpoint-name", type=str, required=True,
-                       help="Name of the SageMaker endpoint")
-    parser.add_argument("--baseline-dataset", type=str, required=True,
-                       help="S3 path to baseline dataset")
-    parser.add_argument("--target-column", type=str, required=True,
-                       help="Name of the target column")
-    parser.add_argument("--features", type=str, required=True,
-                       help="Comma-separated list of feature names")
-    parser.add_argument("--sensitive-columns", type=str, default=None,
-                       help="Comma-separated list of sensitive column names (optional)")
-    parser.add_argument("--aws-profile", type=str, default="ab",
-                       help="AWS profile to use")
-    parser.add_argument("--region", type=str, default="us-east-1",
-                       help="AWS region")
-    
+    parser = argparse.ArgumentParser(description='Set up SageMaker Clarify explainability')
+    parser.add_argument('--profile', type=str, default='ab', help='AWS profile to use')
+    parser.add_argument('--endpoint-name', type=str, required=True, help='Name of the endpoint')
+    parser.add_argument('--clarify-job-name', type=str, required=True, help='Name of the Clarify job')
+    parser.add_argument('--instance-type', type=str, default='ml.m5.xlarge', help='Instance type for Clarify job')
+    parser.add_argument('--instance-count', type=int, default=1, help='Number of instances for Clarify job')
+    parser.add_argument('--output', type=str, default='clarify_info.json', help='Path to output JSON file')
     return parser.parse_args()
 
+def setup_clarify_explainability(args):
+    """Set up SageMaker Clarify explainability."""
+    # Set up AWS session
+    session = boto3.Session(profile_name=args.profile)
+    sagemaker_client = session.client('sagemaker')
+    
+    # Create Clarify job
+    logger.info(f"Creating Clarify job: {args.clarify_job_name}")
+    
+    # Define Clarify job configuration
+    clarify_job_config = {
+        'JobName': args.clarify_job_name,
+        'RoleArn': f"arn:aws:iam::{session.client('sts').get_caller_identity()['Account']}:role/service-role/AmazonSageMaker-ExecutionRole",
+        'ModelConfig': {
+            'ModelName': args.endpoint_name,
+            'EnvVariables': {
+                'SAGEMAKER_CONTAINER_LOG_LEVEL': '20',
+                'SAGEMAKER_REGION': session.region_name
+            }
+        },
+        'ExplainerConfig': {
+            'Shap': {
+                'ShapBaselineConfig': {
+                    'MimeType': 'image/jpeg',
+                    'ShapBaseline': 's3://lucaskle-ab3-project-pv/clarify/baselines/black_image.jpg'
+                },
+                'NumberOfSamples': 100,
+                'Seed': 42
+            }
+        },
+        'DataConfig': {
+            'S3Uri': f"s3://lucaskle-ab3-project-pv/clarify/input/{args.endpoint_name}/",
+            'LocalPath': '/opt/ml/processing/input',
+            'S3DataDistributionType': 'FullyReplicated',
+            'S3InputMode': 'File'
+        },
+        'OutputConfig': {
+            'S3OutputPath': f"s3://lucaskle-ab3-project-pv/clarify/output/{args.endpoint_name}/",
+            'LocalPath': '/opt/ml/processing/output'
+        },
+        'ResourceConfig': {
+            'InstanceType': args.instance_type,
+            'InstanceCount': args.instance_count,
+            'VolumeSizeInGB': 20
+        },
+        'NetworkConfig': {
+            'EnableInterContainerTrafficEncryption': True,
+            'EnableNetworkIsolation': True
+        },
+        'StoppingCondition': {
+            'MaxRuntimeInSeconds': 3600
+        }
+    }
+    
+    # Create Clarify job
+    response = sagemaker_client.create_processing_job(**clarify_job_config)
+    
+    # Save Clarify job info
+    clarify_info = {
+        'endpoint_name': args.endpoint_name,
+        'clarify_job_name': args.clarify_job_name,
+        'clarify_job_arn': response['ProcessingJobArn'],
+        'output_s3_uri': f"s3://lucaskle-ab3-project-pv/clarify/output/{args.endpoint_name}/",
+        'creation_time': datetime.now().isoformat()
+    }
+    
+    with open(args.output, 'w') as f:
+        json.dump(clarify_info, f, indent=2)
+    
+    logger.info(f"Clarify job info saved to {args.output}")
+    return clarify_info
 
 def main():
     """Main function."""
-    args = parse_arguments()
-    
-    try:
-        # Parse features and sensitive columns
-        features = [f.strip() for f in args.features.split(",")]
-        sensitive_columns = None
-        if args.sensitive_columns:
-            sensitive_columns = [f.strip() for f in args.sensitive_columns.split(",")]
-        
-        logger.info(f"Setting up SageMaker Clarify for endpoint: {args.endpoint_name}")
-        logger.info(f"Baseline dataset: {args.baseline_dataset}")
-        logger.info(f"Target column: {args.target_column}")
-        logger.info(f"Features: {features}")
-        logger.info(f"Sensitive columns: {sensitive_columns}")
-        
-        # Add Clarify to endpoint
-        clarify_config = add_clarify_to_endpoint(
-            endpoint_name=args.endpoint_name,
-            baseline_dataset=args.baseline_dataset,
-            target_column=args.target_column,
-            features=features,
-            sensitive_columns=sensitive_columns,
-            aws_profile=args.aws_profile,
-            region=args.region
-        )
-        
-        # Print configuration
-        logger.info("SageMaker Clarify setup completed successfully")
-        logger.info(f"Explainability report: {clarify_config['explainability']['report_path']}")
-        logger.info(f"Dashboard: {clarify_config['dashboard']['dashboard_name']}")
-        
-        # Print instructions
-        print("\n=== SageMaker Clarify Setup Complete ===")
-        print(f"Explainability report: {clarify_config['explainability']['report_path']}")
-        print(f"CloudWatch dashboard: {clarify_config['dashboard']['dashboard_name']}")
-        print("\nTo view the report:")
-        print(f"  aws s3 cp {clarify_config['explainability']['report_path']} ./report.html --profile {args.aws_profile}")
-        print("  open ./report.html")
-        print("\nTo view the dashboard:")
-        print(f"  Open AWS CloudWatch console and navigate to Dashboards > {clarify_config['dashboard']['dashboard_name']}")
-        
-        return 0
-        
-    except Exception as e:
-        logger.error(f"Error setting up SageMaker Clarify: {str(e)}")
-        return 1
+    args = parse_args()
+    setup_clarify_explainability(args)
 
-
-if __name__ == "__main__":
-    sys.exit(main())
+if __name__ == '__main__':
+    main()

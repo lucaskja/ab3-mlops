@@ -1,0 +1,44 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+    commands:
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+      - pip install boto3 sagemaker pytest
+
+  pre_build:
+    commands:
+      - echo "Setting up AWS profile"
+      - aws configure set region $AWS_REGION --profile $AWS_PROFILE
+      - echo "Checking environment variables"
+      - echo "SAGEMAKER_PROJECT_NAME: $SAGEMAKER_PROJECT_NAME"
+      - echo "SAGEMAKER_PROJECT_ID: $SAGEMAKER_PROJECT_ID"
+      - echo "ENDPOINT_NAME: $ENDPOINT_NAME"
+
+  build:
+    commands:
+      - echo "Running endpoint tests"
+      - python -m pytest tests/test_endpoint_performance.py --endpoint-name "$ENDPOINT_NAME-$SAGEMAKER_PROJECT_ID" --profile $AWS_PROFILE
+      - echo "Checking endpoint metrics"
+      - python scripts/deployment/check_endpoint_metrics.py --profile $AWS_PROFILE --endpoint-name "$ENDPOINT_NAME-$SAGEMAKER_PROJECT_ID" --output endpoint_metrics.json
+      - echo "Validating endpoint performance"
+      - python -c "import json; metrics = json.load(open('endpoint_metrics.json')); assert metrics['latency_p95'] < 200, 'Endpoint latency too high'; assert metrics['error_rate'] < 0.01, 'Endpoint error rate too high'"
+
+  post_build:
+    commands:
+      - echo "Staging tests completed on `date`"
+      - echo "Preparing for production deployment"
+      - python scripts/deployment/prepare_production_deployment.py --profile $AWS_PROFILE --endpoint-metrics endpoint_metrics.json --output production_deployment_info.json
+
+artifacts:
+  files:
+    - approved_model.json
+    - endpoint_info.json
+    - endpoint_metrics.json
+    - production_deployment_info.json
+    - requirements.txt
+    - prod-buildspec.yml
+  discard-paths: no

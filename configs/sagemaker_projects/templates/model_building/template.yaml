@@ -1,0 +1,203 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SageMaker Project template for YOLOv11 model building pipeline'
+
+Parameters:
+  SageMakerProjectName:
+    Type: String
+    Description: Name of the SageMaker project
+    MinLength: 1
+    MaxLength: 32
+    AllowedPattern: ^[a-zA-Z](-*[a-zA-Z0-9])*
+  
+  SageMakerProjectId:
+    Type: String
+    Description: Service generated ID of the project
+  
+  ModelBuildCodeRepositoryName:
+    Type: String
+    Description: Name of the CodeCommit repository for model building
+    Default: 'mlops-sagemaker-demo-model-build'
+  
+  ModelPackageGroupName:
+    Type: String
+    Description: Name of the model package group
+    Default: 'mlops-sagemaker-demo-models'
+
+Resources:
+  ModelBuildCodeRepository:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Sub ${ModelBuildCodeRepositoryName}-${SageMakerProjectId}
+      RepositoryDescription: !Sub 'Repository for the ${SageMakerProjectName} project model building code'
+      Code:
+        S3:
+          Bucket: !Sub 'lucaskle-ab3-project-pv'
+          Key: 'sagemaker-projects/seed-code/model-build-seed.zip'
+        BranchName: main
+
+  ModelBuildCodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonECR-FullAccess'
+
+  ModelBuildCodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/AWSCodeStarFullAccess'
+
+  ModelBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub sagemaker-${SageMakerProjectName}-${SageMakerProjectId}-modelbuild
+      ServiceRole: !GetAtt ModelBuildCodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: SAGEMAKER_PROJECT_NAME
+            Value: !Ref SageMakerProjectName
+          - Name: SAGEMAKER_PROJECT_ID
+            Value: !Ref SageMakerProjectId
+          - Name: MODEL_PACKAGE_GROUP_NAME
+            Value: !Ref ModelPackageGroupName
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_PROFILE
+            Value: 'ab'
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec.yml
+
+  ModelTestProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub sagemaker-${SageMakerProjectName}-${SageMakerProjectId}-modeltest
+      ServiceRole: !GetAtt ModelBuildCodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: SAGEMAKER_PROJECT_NAME
+            Value: !Ref SageMakerProjectName
+          - Name: SAGEMAKER_PROJECT_ID
+            Value: !Ref SageMakerProjectId
+          - Name: MODEL_PACKAGE_GROUP_NAME
+            Value: !Ref ModelPackageGroupName
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_PROFILE
+            Value: 'ab'
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: test-buildspec.yml
+
+  ModelBuildPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub sagemaker-${SageMakerProjectName}-${SageMakerProjectId}-modelbuild
+      RoleArn: !GetAtt ModelBuildCodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Sub sagemaker-project-${SageMakerProjectId}
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: '1'
+              Configuration:
+                RepositoryName: !GetAtt ModelBuildCodeRepository.Name
+                BranchName: main
+                PollForSourceChanges: false
+              OutputArtifacts:
+                - Name: SourceCode
+        
+        - Name: Build
+          Actions:
+            - Name: BuildModel
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref ModelBuildProject
+              InputArtifacts:
+                - Name: SourceCode
+              OutputArtifacts:
+                - Name: BuildOutput
+        
+        - Name: Test
+          Actions:
+            - Name: TestModel
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref ModelTestProject
+              InputArtifacts:
+                - Name: BuildOutput
+              OutputArtifacts:
+                - Name: TestOutput
+        
+        - Name: Register
+          Actions:
+            - Name: RegisterModel
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: '1'
+              Configuration:
+                FunctionName: !Sub sagemaker-${SageMakerProjectName}-${SageMakerProjectId}-register-model
+              InputArtifacts:
+                - Name: TestOutput
+
+  ModelPackageGroup:
+    Type: AWS::SageMaker::ModelPackageGroup
+    Properties:
+      ModelPackageGroupName: !Sub ${ModelPackageGroupName}-${SageMakerProjectId}
+      ModelPackageGroupDescription: !Sub 'Model package group for ${SageMakerProjectName} project'
+
+Outputs:
+  ModelBuildCodeRepositoryName:
+    Value: !GetAtt ModelBuildCodeRepository.Name
+  
+  ModelPackageGroupName:
+    Value: !GetAtt ModelPackageGroup.ModelPackageGroupName
+  
+  ModelBuildPipelineName:
+    Value: !Ref ModelBuildPipeline
