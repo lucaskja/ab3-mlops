@@ -1,327 +1,358 @@
 #!/bin/bash
 # Cleanup script for MLOps SageMaker Demo resources
-# This script deletes all AWS resources created by the MLOps SageMaker Demo
+# This script removes all AWS resources created for the demo
 
-# Set strict error handling
 set -e
 
-# Set default AWS profile
-AWS_PROFILE=${AWS_PROFILE:-ab}
-AWS_REGION=${AWS_REGION:-us-east-1}
-PROJECT_NAME="mlops-sagemaker-demo"
-DATA_BUCKET="lucaskle-ab3-project-pv"
-
-# Colors for output
-RED='\033[0;31m'
+# Color codes for output
 GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Function to print section header
-print_section() {
-    echo -e "\n${BLUE}=== $1 ===${NC}"
+# Check if venv exists
+if [ ! -d "venv" ]; then
+    print_info "Creating virtual environment..."
+    python3 -m venv venv
+    print_success "Virtual environment created"
+fi
+
+# Use Python from venv
+PYTHON="venv/bin/python"
+PIP="venv/bin/pip"
+
+# Check and install dependencies
+print_info "Checking dependencies..."
+if [ -f "requirements.txt" ]; then
+    print_info "Installing dependencies from requirements.txt..."
+    $PIP install -r requirements.txt
+    print_success "Dependencies installed"
+else
+    print_info "Installing required packages..."
+    $PIP install boto3 sagemaker
+    print_success "Required packages installed"
+fi
+
+# Print with colors
+print_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
 }
 
-# Function to print success message
-print_success() {
-    echo -e "${GREEN}✓ $1${NC}"
-}
-
-# Function to print warning message
 print_warning() {
-    echo -e "${YELLOW}⚠ $1${NC}"
+    echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-# Function to print error message
 print_error() {
-    echo -e "${RED}✗ $1${NC}"
+    echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Function to confirm action
-confirm_action() {
-    read -p "Are you sure you want to proceed with cleanup? This will delete all resources created by the MLOps SageMaker Demo. (y/n) " -n 1 -r
-    echo
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_header() {
+    echo -e "\n${GREEN}========== $1 ==========${NC}\n"
+}
+
+# Get script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
+
+# Default values
+AWS_PROFILE="ab"
+AWS_REGION="us-east-1"
+PROJECT_NAME="mlops-sagemaker-demo"
+ENDPOINT_NAME="${PROJECT_NAME}-yolov11-endpoint"
+FORCE=false
+SKIP_CONFIRMATION=false
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  key="$1"
+  case $key in
+    --profile)
+      AWS_PROFILE="$2"
+      shift
+      shift
+      ;;
+    --region)
+      AWS_REGION="$2"
+      shift
+      shift
+      ;;
+    --project-name)
+      PROJECT_NAME="$2"
+      shift
+      shift
+      ;;
+    --endpoint-name)
+      ENDPOINT_NAME="$2"
+      shift
+      shift
+      ;;
+    --force)
+      FORCE=true
+      shift
+      ;;
+    --yes)
+      SKIP_CONFIRMATION=true
+      shift
+      ;;
+    --help)
+      echo "Usage: $0 [OPTIONS]"
+      echo ""
+      echo "Clean up AWS resources for MLOps SageMaker Demo"
+      echo ""
+      echo "Options:"
+      echo "  --profile PROFILE            AWS CLI profile to use (default: ab)"
+      echo "  --region REGION              AWS region (default: us-east-1)"
+      echo "  --project-name NAME          Project name (default: mlops-sagemaker-demo)"
+      echo "  --endpoint-name NAME         SageMaker endpoint name (default: mlops-sagemaker-demo-yolov11-endpoint)"
+      echo "  --force                      Force cleanup even if resources are in use"
+      echo "  --yes                        Skip confirmation prompts"
+      echo "  --help                       Show this help message"
+      exit 0
+      ;;
+    *)
+      print_error "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+done
+
+# Set AWS profile
+export AWS_PROFILE=$AWS_PROFILE
+export AWS_DEFAULT_REGION=$AWS_REGION
+
+# Print configuration
+print_header "Configuration"
+echo "AWS Profile: $AWS_PROFILE"
+echo "AWS Region: $AWS_REGION"
+echo "Project Name: $PROJECT_NAME"
+echo "Endpoint Name: $ENDPOINT_NAME"
+echo "Force: $FORCE"
+echo "Skip Confirmation: $SKIP_CONFIRMATION"
+echo ""
+
+# Confirm cleanup
+if [ "$SKIP_CONFIRMATION" = false ]; then
+    echo -e "${RED}WARNING: This script will delete all AWS resources created for the MLOps SageMaker Demo.${NC}"
+    echo -e "${RED}This action cannot be undone.${NC}"
+    echo ""
+    read -p "Are you sure you want to proceed? (y/n) " -n 1 -r
+    echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Cleanup cancelled."
-        exit 1
+        print_info "Cleanup cancelled."
+        exit 0
     fi
-}
+fi
 
-# Function to delete SageMaker endpoints
-delete_sagemaker_endpoints() {
-    print_section "Deleting SageMaker Endpoints"
+# Delete SageMaker endpoint
+print_header "Deleting SageMaker Endpoint"
+if aws sagemaker describe-endpoint --endpoint-name $ENDPOINT_NAME --profile $AWS_PROFILE &> /dev/null; then
+    print_info "Deleting endpoint: $ENDPOINT_NAME"
+    aws sagemaker delete-endpoint --endpoint-name $ENDPOINT_NAME --profile $AWS_PROFILE
+    print_success "Endpoint deletion initiated"
     
-    # List endpoints
-    endpoints=$(aws sagemaker list-endpoints --profile $AWS_PROFILE --region $AWS_REGION --query "Endpoints[?contains(EndpointName, '$PROJECT_NAME')].EndpointName" --output text)
+    # Get endpoint config name
+    ENDPOINT_CONFIG_NAME=$(aws sagemaker describe-endpoint --endpoint-name $ENDPOINT_NAME --query 'EndpointConfigName' --output text --profile $AWS_PROFILE 2>/dev/null || echo "")
     
-    if [ -z "$endpoints" ]; then
-        print_warning "No SageMaker endpoints found"
-        return
-    fi
-    
-    # Delete endpoints
-    for endpoint in $endpoints; do
-        echo "Deleting endpoint: $endpoint"
-        aws sagemaker delete-endpoint --endpoint-name $endpoint --profile $AWS_PROFILE --region $AWS_REGION
-        print_success "Deleted endpoint: $endpoint"
-    done
-}
-
-# Function to delete SageMaker endpoint configs
-delete_sagemaker_endpoint_configs() {
-    print_section "Deleting SageMaker Endpoint Configs"
-    
-    # List endpoint configs
-    endpoint_configs=$(aws sagemaker list-endpoint-configs --profile $AWS_PROFILE --region $AWS_REGION --query "EndpointConfigs[?contains(EndpointConfigName, '$PROJECT_NAME')].EndpointConfigName" --output text)
-    
-    if [ -z "$endpoint_configs" ]; then
-        print_warning "No SageMaker endpoint configs found"
-        return
-    fi
-    
-    # Delete endpoint configs
-    for config in $endpoint_configs; do
-        echo "Deleting endpoint config: $config"
-        aws sagemaker delete-endpoint-config --endpoint-config-name $config --profile $AWS_PROFILE --region $AWS_REGION
-        print_success "Deleted endpoint config: $config"
-    done
-}
-
-# Function to delete SageMaker models
-delete_sagemaker_models() {
-    print_section "Deleting SageMaker Models"
-    
-    # List models
-    models=$(aws sagemaker list-models --profile $AWS_PROFILE --region $AWS_REGION --query "Models[?contains(ModelName, '$PROJECT_NAME')].ModelName" --output text)
-    
-    if [ -z "$models" ]; then
-        print_warning "No SageMaker models found"
-        return
-    fi
-    
-    # Delete models
-    for model in $models; do
-        echo "Deleting model: $model"
-        aws sagemaker delete-model --model-name $model --profile $AWS_PROFILE --region $AWS_REGION
-        print_success "Deleted model: $model"
-    done
-}
-
-# Function to delete SageMaker pipelines
-delete_sagemaker_pipelines() {
-    print_section "Deleting SageMaker Pipelines"
-    
-    # List pipelines
-    pipelines=$(aws sagemaker list-pipelines --profile $AWS_PROFILE --region $AWS_REGION --query "PipelineSummaries[?contains(PipelineName, '$PROJECT_NAME')].PipelineName" --output text)
-    
-    if [ -z "$pipelines" ]; then
-        print_warning "No SageMaker pipelines found"
-        return
-    fi
-    
-    # Delete pipelines
-    for pipeline in $pipelines; do
-        echo "Deleting pipeline: $pipeline"
-        aws sagemaker delete-pipeline --pipeline-name $pipeline --profile $AWS_PROFILE --region $AWS_REGION
-        print_success "Deleted pipeline: $pipeline"
-    done
-}
-
-# Function to delete monitoring schedules
-delete_monitoring_schedules() {
-    print_section "Deleting Monitoring Schedules"
-    
-    # List monitoring schedules
-    schedules=$(aws sagemaker list-monitoring-schedules --profile $AWS_PROFILE --region $AWS_REGION --query "MonitoringScheduleSummaries[?contains(MonitoringScheduleName, '$PROJECT_NAME')].MonitoringScheduleName" --output text)
-    
-    if [ -z "$schedules" ]; then
-        print_warning "No monitoring schedules found"
-        return
-    fi
-    
-    # Delete monitoring schedules
-    for schedule in $schedules; do
-        echo "Deleting monitoring schedule: $schedule"
-        aws sagemaker delete-monitoring-schedule --monitoring-schedule-name $schedule --profile $AWS_PROFILE --region $AWS_REGION
-        print_success "Deleted monitoring schedule: $schedule"
-    done
-}
-
-# Function to delete CloudWatch dashboards
-delete_cloudwatch_dashboards() {
-    print_section "Deleting CloudWatch Dashboards"
-    
-    # List dashboards
-    dashboards=$(aws cloudwatch list-dashboards --profile $AWS_PROFILE --region $AWS_REGION --query "DashboardEntries[?contains(DashboardName, '$PROJECT_NAME')].DashboardName" --output text)
-    
-    if [ -z "$dashboards" ]; then
-        print_warning "No CloudWatch dashboards found"
-        return
-    fi
-    
-    # Delete dashboards
-    for dashboard in $dashboards; do
-        echo "Deleting dashboard: $dashboard"
-        aws cloudwatch delete-dashboards --dashboard-names $dashboard --profile $AWS_PROFILE --region $AWS_REGION
-        print_success "Deleted dashboard: $dashboard"
-    done
-}
-
-# Function to delete CloudWatch alarms
-delete_cloudwatch_alarms() {
-    print_section "Deleting CloudWatch Alarms"
-    
-    # List alarms
-    alarms=$(aws cloudwatch describe-alarms --profile $AWS_PROFILE --region $AWS_REGION --query "MetricAlarms[?contains(AlarmName, '$PROJECT_NAME')].AlarmName" --output text)
-    
-    if [ -z "$alarms" ]; then
-        print_warning "No CloudWatch alarms found"
-        return
-    fi
-    
-    # Delete alarms
-    echo "Deleting alarms: $alarms"
-    aws cloudwatch delete-alarms --alarm-names $alarms --profile $AWS_PROFILE --region $AWS_REGION
-    print_success "Deleted alarms"
-}
-
-# Function to delete EventBridge rules
-delete_eventbridge_rules() {
-    print_section "Deleting EventBridge Rules"
-    
-    # List rules
-    rules=$(aws events list-rules --profile $AWS_PROFILE --region $AWS_REGION --query "Rules[?contains(Name, '$PROJECT_NAME')].Name" --output text)
-    
-    if [ -z "$rules" ]; then
-        print_warning "No EventBridge rules found"
-        return
-    fi
-    
-    # Delete rules
-    for rule in $rules; do
-        # List targets
-        targets=$(aws events list-targets-by-rule --rule $rule --profile $AWS_PROFILE --region $AWS_REGION --query "Targets[].Id" --output text)
+    if [ -n "$ENDPOINT_CONFIG_NAME" ]; then
+        print_info "Waiting for endpoint to be deleted..."
+        aws sagemaker wait endpoint-deleted --endpoint-name $ENDPOINT_NAME --profile $AWS_PROFILE
         
+        print_info "Deleting endpoint config: $ENDPOINT_CONFIG_NAME"
+        aws sagemaker delete-endpoint-config --endpoint-config-name $ENDPOINT_CONFIG_NAME --profile $AWS_PROFILE
+        print_success "Endpoint config deleted"
+        
+        # Get model names
+        MODEL_NAMES=$(aws sagemaker describe-endpoint-config --endpoint-config-name $ENDPOINT_CONFIG_NAME --query 'ProductionVariants[*].ModelName' --output text --profile $AWS_PROFILE 2>/dev/null || echo "")
+        
+        if [ -n "$MODEL_NAMES" ]; then
+            for MODEL_NAME in $MODEL_NAMES; do
+                print_info "Deleting model: $MODEL_NAME"
+                aws sagemaker delete-model --model-name $MODEL_NAME --profile $AWS_PROFILE
+                print_success "Model deleted"
+            done
+        fi
+    fi
+else
+    print_warning "Endpoint $ENDPOINT_NAME does not exist"
+fi
+
+# Delete monitoring schedules
+print_header "Deleting Monitoring Schedules"
+MONITORING_SCHEDULES=$(aws sagemaker list-monitoring-schedules --query 'MonitoringScheduleSummaries[?contains(MonitoringScheduleName, `'$PROJECT_NAME'`)].MonitoringScheduleName' --output text --profile $AWS_PROFILE)
+
+if [ -n "$MONITORING_SCHEDULES" ]; then
+    for SCHEDULE_NAME in $MONITORING_SCHEDULES; do
+        print_info "Deleting monitoring schedule: $SCHEDULE_NAME"
+        aws sagemaker delete-monitoring-schedule --monitoring-schedule-name $SCHEDULE_NAME --profile $AWS_PROFILE
+        print_success "Monitoring schedule deletion initiated"
+    done
+else
+    print_warning "No monitoring schedules found for $PROJECT_NAME"
+fi
+
+# Delete MLFlow tracking server
+print_header "Deleting MLFlow Tracking Server"
+MLFLOW_ENDPOINT=$(aws sagemaker list-endpoints --query 'Endpoints[?contains(EndpointName, `mlflow`)].EndpointName' --output text --profile $AWS_PROFILE)
+
+if [ -n "$MLFLOW_ENDPOINT" ]; then
+    print_info "Deleting MLFlow endpoint: $MLFLOW_ENDPOINT"
+    aws sagemaker delete-endpoint --endpoint-name $MLFLOW_ENDPOINT --profile $AWS_PROFILE
+    print_success "MLFlow endpoint deletion initiated"
+    
+    # Get endpoint config name
+    MLFLOW_CONFIG_NAME=$(aws sagemaker describe-endpoint --endpoint-name $MLFLOW_ENDPOINT --query 'EndpointConfigName' --output text --profile $AWS_PROFILE 2>/dev/null || echo "")
+    
+    if [ -n "$MLFLOW_CONFIG_NAME" ]; then
+        print_info "Waiting for MLFlow endpoint to be deleted..."
+        aws sagemaker wait endpoint-deleted --endpoint-name $MLFLOW_ENDPOINT --profile $AWS_PROFILE
+        
+        print_info "Deleting MLFlow endpoint config: $MLFLOW_CONFIG_NAME"
+        aws sagemaker delete-endpoint-config --endpoint-config-name $MLFLOW_CONFIG_NAME --profile $AWS_PROFILE
+        print_success "MLFlow endpoint config deleted"
+        
+        # Get model names
+        MLFLOW_MODEL_NAMES=$(aws sagemaker describe-endpoint-config --endpoint-config-name $MLFLOW_CONFIG_NAME --query 'ProductionVariants[*].ModelName' --output text --profile $AWS_PROFILE 2>/dev/null || echo "")
+        
+        if [ -n "$MLFLOW_MODEL_NAMES" ]; then
+            for MODEL_NAME in $MLFLOW_MODEL_NAMES; do
+                print_info "Deleting MLFlow model: $MODEL_NAME"
+                aws sagemaker delete-model --model-name $MODEL_NAME --profile $AWS_PROFILE
+                print_success "MLFlow model deleted"
+            done
+        fi
+    fi
+else
+    print_warning "No MLFlow endpoint found"
+fi
+
+# Delete SageMaker Project
+print_header "Deleting SageMaker Project"
+PROJECT_ID=$(aws sagemaker list-projects --query "ProjectSummaryList[?ProjectName=='$PROJECT_NAME'].ProjectId" --output text --profile $AWS_PROFILE)
+
+if [ -n "$PROJECT_ID" ]; then
+    print_info "Deleting SageMaker project: $PROJECT_NAME (ID: $PROJECT_ID)"
+    aws sagemaker delete-project --project-name $PROJECT_NAME --profile $AWS_PROFILE
+    print_success "SageMaker project deletion initiated"
+else
+    print_warning "No SageMaker project found with name $PROJECT_NAME"
+fi
+
+# Delete EventBridge rules
+print_header "Deleting EventBridge Rules"
+RULES=$(aws events list-rules --name-prefix $PROJECT_NAME --query 'Rules[*].Name' --output text --profile $AWS_PROFILE)
+
+if [ -n "$RULES" ]; then
+    for RULE_NAME in $RULES; do
         # Remove targets
-        if [ ! -z "$targets" ]; then
-            echo "Removing targets from rule: $rule"
-            aws events remove-targets --rule $rule --ids $targets --profile $AWS_PROFILE --region $AWS_REGION
+        TARGETS=$(aws events list-targets-by-rule --rule $RULE_NAME --query 'Targets[*].Id' --output text --profile $AWS_PROFILE)
+        
+        if [ -n "$TARGETS" ]; then
+            print_info "Removing targets from rule: $RULE_NAME"
+            aws events remove-targets --rule $RULE_NAME --ids $TARGETS --profile $AWS_PROFILE
+            print_success "Targets removed"
         fi
         
-        # Delete rule
-        echo "Deleting rule: $rule"
-        aws events delete-rule --name $rule --profile $AWS_PROFILE --region $AWS_REGION
-        print_success "Deleted rule: $rule"
+        print_info "Deleting EventBridge rule: $RULE_NAME"
+        aws events delete-rule --name $RULE_NAME --profile $AWS_PROFILE
+        print_success "EventBridge rule deleted"
     done
-}
+else
+    print_warning "No EventBridge rules found with prefix $PROJECT_NAME"
+fi
 
-# Function to empty S3 bucket
-empty_s3_bucket() {
-    print_section "Emptying S3 Bucket: $DATA_BUCKET"
-    
-    # Check if bucket exists
-    if ! aws s3api head-bucket --bucket $DATA_BUCKET --profile $AWS_PROFILE 2>/dev/null; then
-        print_warning "Bucket $DATA_BUCKET does not exist or you don't have access"
-        return
-    fi
-    
-    # Empty bucket
-    echo "Emptying bucket: $DATA_BUCKET"
-    aws s3 rm s3://$DATA_BUCKET --recursive --profile $AWS_PROFILE
-    print_success "Emptied bucket: $DATA_BUCKET"
-}
+# Delete SNS topics
+print_header "Deleting SNS Topics"
+TOPICS=$(aws sns list-topics --query "Topics[?contains(TopicArn, '$PROJECT_NAME')].TopicArn" --output text --profile $AWS_PROFILE)
 
-# Function to delete CloudFormation stacks
-delete_cloudformation_stacks() {
-    print_section "Deleting CloudFormation Stacks"
-    
-    # List stacks
-    stacks=$(aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE --profile $AWS_PROFILE --region $AWS_REGION --query "StackSummaries[?contains(StackName, '$PROJECT_NAME')].StackName" --output text)
-    
-    if [ -z "$stacks" ]; then
-        print_warning "No CloudFormation stacks found"
-        return
-    fi
-    
-    # Delete stacks
-    for stack in $stacks; do
-        echo "Deleting stack: $stack"
-        aws cloudformation delete-stack --stack-name $stack --profile $AWS_PROFILE --region $AWS_REGION
-        
-        # Wait for stack deletion to complete
-        echo "Waiting for stack deletion to complete..."
-        aws cloudformation wait stack-delete-complete --stack-name $stack --profile $AWS_PROFILE --region $AWS_REGION
-        print_success "Deleted stack: $stack"
+if [ -n "$TOPICS" ]; then
+    for TOPIC_ARN in $TOPICS; do
+        print_info "Deleting SNS topic: $TOPIC_ARN"
+        aws sns delete-topic --topic-arn $TOPIC_ARN --profile $AWS_PROFILE
+        print_success "SNS topic deleted"
     done
-}
+else
+    print_warning "No SNS topics found for $PROJECT_NAME"
+fi
 
-# Function to verify cleanup
-verify_cleanup() {
-    print_section "Verifying Cleanup"
-    
-    # Check endpoints
-    endpoints=$(aws sagemaker list-endpoints --profile $AWS_PROFILE --region $AWS_REGION --query "Endpoints[?contains(EndpointName, '$PROJECT_NAME')].EndpointName" --output text)
-    if [ ! -z "$endpoints" ]; then
-        print_warning "Some SageMaker endpoints still exist: $endpoints"
-    else
-        print_success "No SageMaker endpoints found"
-    fi
-    
-    # Check models
-    models=$(aws sagemaker list-models --profile $AWS_PROFILE --region $AWS_REGION --query "Models[?contains(ModelName, '$PROJECT_NAME')].ModelName" --output text)
-    if [ ! -z "$models" ]; then
-        print_warning "Some SageMaker models still exist: $models"
-    else
-        print_success "No SageMaker models found"
-    fi
-    
-    # Check pipelines
-    pipelines=$(aws sagemaker list-pipelines --profile $AWS_PROFILE --region $AWS_REGION --query "PipelineSummaries[?contains(PipelineName, '$PROJECT_NAME')].PipelineName" --output text)
-    if [ ! -z "$pipelines" ]; then
-        print_warning "Some SageMaker pipelines still exist: $pipelines"
-    else
-        print_success "No SageMaker pipelines found"
-    fi
-    
-    # Check stacks
-    stacks=$(aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE --profile $AWS_PROFILE --region $AWS_REGION --query "StackSummaries[?contains(StackName, '$PROJECT_NAME')].StackName" --output text)
-    if [ ! -z "$stacks" ]; then
-        print_warning "Some CloudFormation stacks still exist: $stacks"
-    else
-        print_success "No CloudFormation stacks found"
-    fi
-}
+# Delete Lambda functions
+print_header "Deleting Lambda Functions"
+FUNCTIONS=$(aws lambda list-functions --query "Functions[?contains(FunctionName, '$PROJECT_NAME')].FunctionName" --output text --profile $AWS_PROFILE)
 
-# Main function
-main() {
-    echo -e "${BLUE}MLOps SageMaker Demo Cleanup Script${NC}"
-    echo -e "${YELLOW}This script will delete all resources created by the MLOps SageMaker Demo.${NC}"
-    echo -e "${YELLOW}AWS Profile: $AWS_PROFILE${NC}"
-    echo -e "${YELLOW}AWS Region: $AWS_REGION${NC}"
-    
-    # Confirm action
-    confirm_action
-    
-    # Delete resources
-    delete_sagemaker_endpoints
-    delete_sagemaker_endpoint_configs
-    delete_sagemaker_models
-    delete_sagemaker_pipelines
-    delete_monitoring_schedules
-    delete_cloudwatch_dashboards
-    delete_cloudwatch_alarms
-    delete_eventbridge_rules
-    empty_s3_bucket
-    delete_cloudformation_stacks
-    
-    # Verify cleanup
-    verify_cleanup
-    
-    print_section "Cleanup Complete"
-    echo -e "${GREEN}Cleanup process has completed. Please check the output for any warnings or errors.${NC}"
-    echo -e "${YELLOW}To verify that all costs have been eliminated, check the AWS Cost Explorer.${NC}"
-}
+if [ -n "$FUNCTIONS" ]; then
+    for FUNCTION_NAME in $FUNCTIONS; do
+        print_info "Deleting Lambda function: $FUNCTION_NAME"
+        aws lambda delete-function --function-name $FUNCTION_NAME --profile $AWS_PROFILE
+        print_success "Lambda function deleted"
+    done
+else
+    print_warning "No Lambda functions found for $PROJECT_NAME"
+fi
 
-# Run main function
-main
+# Delete S3 buckets
+print_header "Deleting S3 Buckets"
+MLFLOW_BUCKET="${PROJECT_NAME}-mlflow-artifacts"
+
+if aws s3 ls "s3://$MLFLOW_BUCKET" --profile $AWS_PROFILE &> /dev/null; then
+    print_info "Emptying bucket: $MLFLOW_BUCKET"
+    aws s3 rm "s3://$MLFLOW_BUCKET" --recursive --profile $AWS_PROFILE
+    
+    print_info "Deleting bucket: $MLFLOW_BUCKET"
+    aws s3 rb "s3://$MLFLOW_BUCKET" --profile $AWS_PROFILE
+    print_success "S3 bucket deleted"
+else
+    print_warning "S3 bucket $MLFLOW_BUCKET does not exist"
+fi
+
+# Delete CDK stacks
+print_header "Deleting CDK Stacks"
+ENDPOINT_STACK="${PROJECT_NAME}-endpoint-stack"
+
+if aws cloudformation describe-stacks --stack-name $ENDPOINT_STACK --profile $AWS_PROFILE &> /dev/null; then
+    print_info "Deleting CloudFormation stack: $ENDPOINT_STACK"
+    aws cloudformation delete-stack --stack-name $ENDPOINT_STACK --profile $AWS_PROFILE
+    
+    print_info "Waiting for stack deletion to complete..."
+    aws cloudformation wait stack-delete-complete --stack-name $ENDPOINT_STACK --profile $AWS_PROFILE
+    print_success "CloudFormation stack deleted"
+else
+    print_warning "CloudFormation stack $ENDPOINT_STACK does not exist"
+fi
+
+# Delete IAM roles and policies
+print_header "Deleting IAM Roles and Policies"
+IAM_STACK="${PROJECT_NAME}-iam-roles"
+
+if aws cloudformation describe-stacks --stack-name $IAM_STACK --profile $AWS_PROFILE &> /dev/null; then
+    print_info "Deleting CloudFormation stack: $IAM_STACK"
+    aws cloudformation delete-stack --stack-name $IAM_STACK --profile $AWS_PROFILE
+    
+    print_info "Waiting for stack deletion to complete..."
+    aws cloudformation wait stack-delete-complete --stack-name $IAM_STACK --profile $AWS_PROFILE
+    print_success "CloudFormation stack deleted"
+else
+    print_warning "CloudFormation stack $IAM_STACK does not exist"
+fi
+
+# Delete cost budgets
+print_header "Deleting Cost Budgets"
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text --profile $AWS_PROFILE)
+BUDGETS=$(aws budgets describe-budgets --account-id $ACCOUNT_ID --query "Budgets[?contains(BudgetName, '$PROJECT_NAME')].BudgetName" --output text --profile $AWS_PROFILE 2>/dev/null || echo "")
+
+if [ -n "$BUDGETS" ]; then
+    for BUDGET_NAME in $BUDGETS; do
+        print_info "Deleting budget: $BUDGET_NAME"
+        aws budgets delete-budget --account-id $ACCOUNT_ID --budget-name "$BUDGET_NAME" --profile $AWS_PROFILE
+        print_success "Budget deleted"
+    done
+else
+    print_warning "No budgets found for $PROJECT_NAME"
+fi
+
+print_header "Cleanup Complete"
+print_success "All resources for $PROJECT_NAME have been deleted or deletion has been initiated."
+print_info "Some resources may take time to be fully deleted."
+print_info "Check the AWS Management Console to verify all resources have been properly cleaned up."
