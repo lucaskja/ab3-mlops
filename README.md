@@ -120,6 +120,14 @@ The core setup focuses on:
 - Role-based access control with appropriate permissions
 - Access to the drone imagery data in S3
 - Basic infrastructure for YOLOv11 model training
+- Core notebook deployment for immediate productivity
+
+**Complete Core Setup Workflow:**
+
+1. Deploy core infrastructure: `./scripts/setup/deploy_core_sagemaker.sh --profile ab`
+2. Deploy core notebooks: `python scripts/setup/deploy_notebooks_to_studio.py --profile ab`
+3. Access SageMaker Studio and follow the generated instructions in `SAGEMAKER_STUDIO_INSTRUCTIONS.md`
+4. Use role-specific core notebooks for immediate productivity
 
 Options for the core setup:
 ```bash
@@ -133,6 +141,60 @@ Key parameters:
 - `--data-bucket`: Data bucket name (default: lucaskle-ab3-project-pv)
 - `--skip-validation`: Skip validation steps
 - `--skip-stack-wait`: Skip waiting for CloudFormation stack updates
+
+##### Deploying Core Notebooks to SageMaker Studio
+
+After setting up the core SageMaker infrastructure, you can deploy the core notebooks to SageMaker Studio:
+
+```bash
+python scripts/setup/deploy_notebooks_to_studio.py --profile ab
+```
+
+This script will:
+- Upload core notebooks to S3 with timestamped organization
+- Create deployment scripts for SageMaker Studio
+- Generate role-specific README files with usage instructions
+- Create comprehensive user instructions for accessing notebooks
+
+The deployment includes:
+- **Data Scientist Notebooks**: `data-scientist-core-enhanced.ipynb` with MLFlow integration for data exploration and preparation
+- **ML Engineer Notebooks**: `ml-engineer-core-enhanced.ipynb` with MLFlow and Model Registry integration for pipeline management
+
+After running the deployment script, you'll get:
+- Generated deployment script: `scripts/setup/deploy_studio_notebooks.sh`
+- User instructions: `SAGEMAKER_STUDIO_INSTRUCTIONS.md`
+- Role-specific README files: `notebooks/README_data-scientist.md` and `notebooks/README_ml-engineer.md`
+
+##### Accessing Notebooks in SageMaker Studio
+
+To access the deployed notebooks in SageMaker Studio:
+
+1. **Open SageMaker Studio** in your browser
+2. **Open a terminal** in SageMaker Studio
+3. **Download notebooks** using the provided commands:
+
+```bash
+# For Data Scientists:
+mkdir -p ~/data-scientist-notebooks
+aws s3 cp s3://lucaskle-ab3-project-pv/sagemaker-studio-notebooks/[timestamp]/data-scientist/data-scientist-core-enhanced.ipynb ~/data-scientist-notebooks/ --profile ab
+
+# For ML Engineers:
+mkdir -p ~/ml-engineer-notebooks
+aws s3 cp s3://lucaskle-ab3-project-pv/sagemaker-studio-notebooks/[timestamp]/ml-engineer/ml-engineer-core-enhanced.ipynb ~/ml-engineer-notebooks/ --profile ab
+```
+
+4. **Navigate** to the appropriate directory in the SageMaker Studio file browser
+5. **Open** the notebook for your role
+
+Alternatively, you can use the generated deployment script:
+```bash
+./scripts/setup/deploy_studio_notebooks.sh
+```
+
+Or the simple copy script for quick access:
+```bash
+./scripts/setup/copy_notebooks_to_studio.sh
+```
 
 To validate the core setup after deployment:
 ```bash
@@ -339,24 +401,73 @@ graph TB
     ML_Monitor --> Monitor
 ```
 
+## Core Notebooks
+
+The project includes role-specific core notebooks that provide essential functionality for each user type:
+
+### Data Scientist Core Notebook
+
+**`notebooks/data-scientist-core-enhanced.ipynb`**
+
+This notebook provides comprehensive data exploration and preparation capabilities with MLFlow integration:
+
+- **Data Exploration**: Analyze drone imagery datasets with S3 integration
+- **Image Analysis**: Basic image characteristics analysis (dimensions, file sizes, formats)
+- **Data Visualization**: Sample image display and dataset statistics
+- **MLFlow Tracking**: Complete experiment tracking for all data exploration activities
+- **Data Preparation**: Prepare data structure for YOLOv11 training
+- **Ground Truth Integration**: Create SageMaker Ground Truth labeling jobs
+- **Input Manifest Creation**: Generate manifest files for labeling jobs
+
+Key features:
+- AWS profile integration with "ab" profile
+- S3 data access and exploration
+- MLFlow experiment tracking for reproducibility
+- Interactive data visualization
+- Ground Truth labeling job configuration
+- YOLO dataset structure preparation
+
+### ML Engineer Core Notebook
+
+**`notebooks/ml-engineer-core-enhanced.ipynb`**
+
+This notebook provides training pipeline execution and management with MLFlow and Model Registry integration:
+
+- **Pipeline Configuration**: Set up YOLOv11 training pipeline parameters
+- **Pipeline Execution**: Execute SageMaker training jobs with MLFlow tracking
+- **Pipeline Monitoring**: Monitor training progress and results in real-time
+- **Model Registry**: Automatic model registration in SageMaker Model Registry
+- **Experiment Management**: View and compare MLFlow experiments and runs
+- **Model Approval**: Manage model approval workflows for production deployment
+
+Key features:
+- Dataset discovery and validation
+- SageMaker training job creation and execution
+- MLFlow experiment and run management
+- Model Registry integration with approval workflows
+- Training job monitoring and status tracking
+- Model artifact management and versioning
+
 ## Usage Guides
 
 ### Data Scientists
 
-1. **Data Exploration**: Use notebooks in `notebooks/data-exploration/` to analyze the drone imagery dataset.
+1. **Core Workflow**: Start with `notebooks/data-scientist-core-enhanced.ipynb` for essential data exploration and preparation tasks.
+2. **Advanced Data Exploration**: Use notebooks in `notebooks/data-exploration/` to analyze the drone imagery dataset.
    - Utilize the `DroneImageryProfiler` to analyze image characteristics, quality metrics, and get recommendations
    - Generate comprehensive profile reports with resolution, brightness, contrast, sharpness, and color diversity metrics
-2. **Data Labeling**: Create and manage Ground Truth labeling jobs using notebooks in `notebooks/data-labeling/`.
-3. **Model Development**: Experiment with YOLOv11 models using notebooks in `notebooks/model-development/`.
+3. **Data Labeling**: Create and manage Ground Truth labeling jobs using notebooks in `notebooks/data-labeling/`.
+4. **Model Development**: Experiment with YOLOv11 models using notebooks in `notebooks/model-development/`.
 
 For detailed instructions, see the [Data Scientist Guide](docs/user-guides/data_scientist_guide.md).
 
 ### ML Engineers
 
-1. **Pipeline Development**: Create and modify SageMaker Pipelines using code in `src/pipeline/`.
-2. **Model Deployment**: Deploy models to endpoints using the deployment scripts.
-3. **Monitoring Setup**: Configure model monitoring using the monitoring modules.
-4. **CI/CD Management**: Manage SageMaker Projects and CI/CD pipelines for automated model building and deployment.
+1. **Core Workflow**: Start with `notebooks/ml-engineer-core-enhanced.ipynb` for essential pipeline execution and model management tasks.
+2. **Pipeline Development**: Create and modify SageMaker Pipelines using code in `src/pipeline/`.
+3. **Model Deployment**: Deploy models to endpoints using the deployment scripts.
+4. **Monitoring Setup**: Configure model monitoring using the monitoring modules.
+5. **CI/CD Management**: Manage SageMaker Projects and CI/CD pipelines for automated model building and deployment.
 
 For detailed instructions, see the [ML Engineer Guide](docs/user-guides/ml_engineer_guide.md).
 
@@ -419,6 +530,10 @@ You can customize the cleanup with various options:
 │   ├── model-training/      # YOLOv11 training examples
 │   └── pipeline/            # Pipeline orchestration examples
 ├── notebooks/               # Jupyter notebooks for development
+│   ├── data-scientist-core-enhanced.ipynb # Core Data Scientist notebook with MLFlow (NEW)
+│   ├── ml-engineer-core-enhanced.ipynb # Core ML Engineer notebook with MLFlow and Model Registry (NEW)
+│   ├── README_data-scientist.md # Generated Data Scientist notebook guide (NEW)
+│   ├── README_ml-engineer.md # Generated ML Engineer notebook guide (NEW)
 │   ├── data-exploration/    # Data analysis and profiling notebooks
 │   ├── data-labeling/       # Ground Truth labeling notebooks
 │   ├── model-development/   # Model training and experimentation
@@ -426,6 +541,9 @@ You can customize the cleanup with various options:
 ├── scripts/                 # Utility and setup scripts
 │   ├── setup/               # Environment and AWS setup scripts
 │   │   ├── deploy_core_sagemaker.sh # Core SageMaker setup script (NEW)
+│   │   ├── deploy_notebooks_to_studio.py # Deploy core notebooks to SageMaker Studio (NEW)
+│   │   ├── deploy_studio_notebooks.sh # Generated notebook deployment script (NEW)
+│   │   ├── copy_notebooks_to_studio.sh # Simple notebook copy script (NEW)
 │   │   ├── cleanup_core_sagemaker.sh # Core SageMaker cleanup script (NEW)
 │   │   ├── validate_core_sagemaker.py # Core SageMaker validation script (NEW)
 │   │   ├── deploy_complete_infrastructure.sh # Complete infrastructure setup
@@ -446,7 +564,9 @@ You can customize the cleanup with various options:
 │   └── monitoring/          # Monitoring and observability modules
 ├── tests/                   # Unit and integration tests
 ├── mlruns/                  # Local MLFlow tracking data
-└── logs/                    # Application logs
+├── logs/                    # Application logs
+├── SAGEMAKER_STUDIO_INSTRUCTIONS.md # Generated SageMaker Studio access instructions (NEW)
+└── DEPLOYMENT_SUMMARY.md   # Deployment summary and status
 ```
 
 ## Contributing

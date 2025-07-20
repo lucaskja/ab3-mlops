@@ -16,7 +16,7 @@ This implementation plan focuses on creating a minimal viable setup of AWS SageM
   - Ensure all AWS operations use the "ab" profile exclusively
   - _Requirements: 1.1, 2.1, 4.5, 5.1_
 
-- [ ] 3. Adapt existing example notebooks for core functionality
+- [x] 3. Adapt existing example notebooks for core functionality
   - Simplify existing Data Scientist notebooks from task 3 and 3.3 in the MLOps SageMaker Demo
   - Focus on essential data exploration and preparation functionality
   - Remove complex features not needed for the core setup
