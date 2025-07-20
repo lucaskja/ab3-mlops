@@ -2,14 +2,14 @@
 
 This implementation plan focuses on creating a minimal viable setup of AWS SageMaker infrastructure with notebooks for Data Scientists and ML Engineers, along with a pipeline for YOLOv11 model training. It leverages components that have already been implemented in the larger MLOps SageMaker Demo project.
 
-- [ ] 1. Create simplified deployment script for core SageMaker infrastructure
+- [x] 1. Create simplified deployment script for core SageMaker infrastructure
   - Leverage existing IAM roles from task 2 in the MLOps SageMaker Demo
   - Create script to deploy only the essential components needed for SageMaker Studio and YOLOv11 training
   - Add verification of "ab" profile configuration before executing any AWS commands
   - Implement error handling and validation checks
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.4, 5.5_
 
-- [ ] 2. Configure SageMaker domain and user profiles
+- [x] 2. Configure SageMaker domain and user profiles
   - Write script to create SageMaker domain with appropriate settings using the "ab" AWS profile
   - Add functionality to create Data Scientist user profile using the "ab" AWS profile
   - Add functionality to create ML Engineer user profile using the "ab" AWS profile
