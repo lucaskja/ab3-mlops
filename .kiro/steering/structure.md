@@ -49,6 +49,8 @@
 │       └── aws_sagemaker_mlops_reference.md # AWS SageMaker MLOps reference
 ├── notebooks/               # Jupyter notebooks for development
 │   ├── README.md            # Notebooks documentation
+│   ├── README_data-scientist.md # Generated Data Scientist notebook guide
+│   ├── README_ml-engineer.md # Generated ML Engineer notebook guide
 │   ├── data-scientist-core.ipynb # Core notebook for Data Scientists
 │   ├── data-scientist-core-enhanced.ipynb # Enhanced core notebook with MLFlow integration
 │   ├── ml-engineer-core.ipynb # Core notebook for ML Engineers
@@ -181,6 +183,8 @@
 │   └── detect/             # Detection model runs
 │       └── yolov11_training/ # YOLOv11 training runs
 ├── README.md               # Project README
+├── DEPLOYMENT_SUMMARY.md   # Deployment summary and status
+├── SAGEMAKER_STUDIO_INSTRUCTIONS.md # Generated SageMaker Studio access instructions
 ├── cdk-fixes-summary.md    # Summary of CDK fixes
 └── requirements.txt        # Python dependencies
 ```
@@ -254,9 +258,12 @@
 - **Role-Specific Notebooks**: Separate notebooks for Data Scientist and ML Engineer workflows
 - **Core Notebooks**: Simplified notebooks at the root level for essential functionality:
   - `data-scientist-core.ipynb`: Data exploration and preparation for YOLOv11 training
-  - `data-scientist-core-enhanced.ipynb`: Enhanced data exploration with MLFlow experiment tracking
+  - `data-scientist-core-enhanced.ipynb`: Enhanced data exploration with MLFlow experiment tracking and Ground Truth integration
   - `ml-engineer-core.ipynb`: Pipeline execution and management for YOLOv11 models
   - `ml-engineer-core-enhanced.ipynb`: Enhanced pipeline management with MLFlow and Model Registry integration
+- **Generated Documentation**: Role-specific README files created during deployment:
+  - `README_data-scientist.md`: Generated guide for Data Scientists with notebook usage instructions
+  - `README_ml-engineer.md`: Generated guide for ML Engineers with notebook usage instructions
 - **Interactive Dashboards**: Advanced notebooks like `create_labeling_job_interactive.ipynb` implement complete dashboard interfaces with tabs, progress tracking, and real-time updates
 
 ### Scripts
@@ -269,8 +276,13 @@
 - **Core Setup Scripts**: Simplified deployment scripts in `scripts/setup/` for core SageMaker infrastructure:
   - `deploy_core_sagemaker.sh`: Deploys essential SageMaker components
   - `deploy_notebooks_to_studio.py`: Deploys core notebooks to SageMaker Studio user profiles
+  - `copy_notebooks_to_studio.sh`: Simple script for copying notebooks to SageMaker Studio
+  - `deploy_studio_notebooks.sh`: Generated deployment script for SageMaker Studio notebooks
   - `validate_core_sagemaker.py`: Validates core SageMaker deployment
   - `cleanup_core_sagemaker.sh`: Removes core SageMaker resources
+- **Documentation Files**: Generated documentation for deployment and access:
+  - `DEPLOYMENT_SUMMARY.md`: Comprehensive deployment status and instructions
+  - `SAGEMAKER_STUDIO_INSTRUCTIONS.md`: Step-by-step SageMaker Studio access instructions
 
 ### Infrastructure as Code
 - **CDK**: TypeScript-based AWS CDK for infrastructure definition
@@ -311,12 +323,23 @@
    - **Enhanced**: `data-scientist-core-enhanced.ipynb` or `ml-engineer-core-enhanced.ipynb` for MLFlow integration
 6. **Clean Up Resources**: Use `cleanup_core_sagemaker.sh` when no longer needed
 
+### Notebook Template Development Workflow
+1. **Template Creation**: Create notebook templates with role-specific functionality
+2. **Content Development**: Implement core workflows for each user role (Data Scientist, ML Engineer)
+3. **MLFlow Integration**: Add comprehensive experiment tracking and model registry integration
+4. **Documentation Generation**: Generate role-specific README files during deployment
+5. **Deployment Integration**: Upload notebooks to S3 and create deployment scripts for SageMaker Studio
+6. **User Instructions**: Generate comprehensive access instructions in `SAGEMAKER_STUDIO_INSTRUCTIONS.md`
+
 ### Enhanced Notebooks Features
 - **MLFlow Integration**: Enhanced notebooks include comprehensive MLFlow experiment tracking
 - **Model Registry**: ML Engineer enhanced notebook includes SageMaker Model Registry integration
+- **Ground Truth Integration**: Data Scientist enhanced notebook includes complete Ground Truth labeling workflow
 - **Artifact Management**: Automatic logging of visualizations, metrics, and model artifacts
 - **Experiment Comparison**: Built-in functionality to compare experiments and model versions
 - **Production Readiness**: Enhanced notebooks prepare models for production deployment workflows
+- **Template-Based Development**: Notebooks serve as templates for creating role-specific workflows
+- **Deployment Automation**: Notebooks are automatically deployed to SageMaker Studio with proper organization
 
 ### Automated Retraining Workflow
 - **Drift Detection**: Configure Model Monitor with `DriftDetector` from `src.monitoring.drift_detection`
@@ -393,14 +416,25 @@
 - **Data Exploration**: Use `notebooks/data-scientist-core.ipynb` or `notebooks/data-scientist-core-enhanced.ipynb` for data analysis
 - **Pipeline Management**: Use `notebooks/ml-engineer-core.ipynb` or `notebooks/ml-engineer-core-enhanced.ipynb` for pipeline execution
 
+### Notebook Template System
+- **Template Development**: Core notebooks serve as templates for role-specific workflows
+- **Automated Deployment**: Notebooks are automatically uploaded to S3 with timestamped organization
+- **Role-Based Access**: Separate deployment paths for Data Scientists and ML Engineers
+- **Documentation Generation**: Automatic generation of role-specific README files and access instructions
+- **SageMaker Studio Integration**: Direct deployment to SageMaker Studio user profiles with proper organization
+- **Version Control**: Timestamped deployment ensures version tracking and rollback capabilities
+
 ### Role-Based Workflows
 - **Data Scientists**: Use core notebooks for essential functionality or demo notebooks for comprehensive workflows:
   - **Core**: `notebooks/data-scientist-core.ipynb` for basic data exploration and preparation
-  - **Enhanced**: `notebooks/data-scientist-core-enhanced.ipynb` for data exploration with MLFlow experiment tracking
+  - **Enhanced**: `notebooks/data-scientist-core-enhanced.ipynb` for data exploration with MLFlow experiment tracking and Ground Truth labeling
   - **Comprehensive**: `notebooks/demo/data_scientist_workflow.ipynb` for complete workflow demonstration
+  - **Documentation**: `notebooks/README_data-scientist.md` for role-specific usage instructions
   - Features: Data exploration and profiling with interactive widgets, Ground Truth labeling job creation and management, Model development with MLFlow experiment tracking, Model evaluation on test datasets
 - **ML Engineers**: Use core notebooks for essential functionality or demo notebooks for comprehensive workflows:
   - **Core**: `notebooks/ml-engineer-core.ipynb` for basic pipeline execution and management
   - **Enhanced**: `notebooks/ml-engineer-core-enhanced.ipynb` for pipeline management with MLFlow and Model Registry integration
   - **Comprehensive**: `notebooks/demo/ml_engineer_workflow.ipynb` for complete workflow demonstration
+  - **Documentation**: `notebooks/README_ml-engineer.md` for role-specific usage instructions
 - **End-to-End Demo**: Use `notebooks/demo/end_to_end_mlops_workflow.ipynb` for complete workflow demonstration
+- **Deployment Access**: Follow instructions in `SAGEMAKER_STUDIO_INSTRUCTIONS.md` for accessing notebooks in SageMaker Studio
