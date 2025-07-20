@@ -23,14 +23,14 @@ This implementation plan focuses on creating a minimal viable setup of AWS SageM
   - Include clear instructions and documentation
   - _Requirements: 1.2, 1.3_
 
-- [ ] 4. Adapt existing ML Engineer notebooks for pipeline execution
+- [x] 4. Adapt existing ML Engineer notebooks for pipeline execution
   - Simplify existing ML Engineer notebooks from task 8.2 in the MLOps SageMaker Demo
   - Focus on pipeline execution and management functionality
   - Remove complex features not needed for the core setup
   - Include clear instructions and documentation
   - _Requirements: 2.2, 2.3, 2.4_
 
-- [ ] 5. Create simplified SageMaker Pipeline for YOLOv11 training
+- [x] 5. Create simplified SageMaker Pipeline for YOLOv11 training
   - Leverage existing pipeline components from task 6 in the MLOps SageMaker Demo
   - Simplify to include only essential training and evaluation steps
   - Configure YOLOv11 training job with appropriate parameters
