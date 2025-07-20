@@ -2,10 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
-import * as path from 'path';
-import * as fs from 'fs';
 import { LambdaToSagemakerEndpoint } from '@aws-solutions-constructs/aws-lambda-sagemakerendpoint';
 
 export interface EndpointStackProps extends cdk.StackProps {
@@ -19,19 +15,7 @@ export class EndpointStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: EndpointStackProps) {
     super(scope, id, props);
 
-    // Create S3 bucket for Lambda code
-    const lambdaCodeBucket = new s3.Bucket(this, 'LambdaCodeBucket', {
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-      versioned: true,
-    });
-
-    // Upload Lambda code to S3
-    new s3deploy.BucketDeployment(this, 'DeployLambdaCode', {
-      sources: [s3deploy.Source.asset(props.lambdaCodePath)],
-      destinationBucket: lambdaCodeBucket,
-      destinationKeyPrefix: 'lambda',
-    });
+    // No need for S3 bucket since we're using inline code
 
     // Create IAM role for Lambda
     const lambdaRole = new iam.Role(this, 'LambdaRole', {
@@ -67,10 +51,58 @@ export class EndpointStack extends cdk.Stack {
     const deployEndpointLambda = new lambda.Function(this, 'DeployEndpointLambda', {
       runtime: lambda.Runtime.PYTHON_3_10,
       handler: 'deploy_endpoint_lambda.lambda_handler',
-      code: lambda.Code.fromBucket(
-        lambdaCodeBucket,
-        'lambda/deploy_endpoint_lambda.py'
-      ),
+      code: lambda.Code.fromInline(`
+def lambda_handler(event, context):
+    """
+    Default Lambda handler for SageMaker endpoint invocation.
+    """
+    import boto3
+    import os
+    import json
+    
+    # Get the SageMaker endpoint name from environment variable
+    endpoint_name = os.environ.get('SAGEMAKER_ENDPOINT_NAME')
+    
+    # Create SageMaker runtime client
+    sagemaker_runtime = boto3.client('sagemaker-runtime')
+    
+    # Log the event for debugging
+    print(f"Received event: {json.dumps(event)}")
+    
+    # Extract payload from event
+    payload = event.get('body', '{}')
+    if isinstance(payload, str):
+        payload = payload.encode('utf-8')
+    
+    # Invoke SageMaker endpoint
+    try:
+        response = sagemaker_runtime.invoke_endpoint(
+            EndpointName=endpoint_name,
+            ContentType='application/json',
+            Body=payload
+        )
+        
+        # Parse response
+        result = response['Body'].read().decode('utf-8')
+        return {
+            'statusCode': 200,
+            'body': result,
+            'headers': {
+                'Content-Type': 'application/json'
+            }
+        }
+    except Exception as e:
+        print(f"Error invoking endpoint: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'error': str(e)
+            }),
+            'headers': {
+                'Content-Type': 'application/json'
+            }
+        }
+`),
       timeout: cdk.Duration.minutes(10),
       memorySize: 256,
       role: lambdaRole,
@@ -86,16 +118,32 @@ export class EndpointStack extends cdk.Stack {
       'LambdaToSagemakerEndpoint',
       {
         existingLambdaObj: deployEndpointLambda,
-        sagemakerEndpointProps: {
+        modelProps: {
           modelName: `${props.modelName}-model`,
-          endpointName: `${props.modelName}-endpoint`,
-          instanceType: 'ml.m5.large',
-          initialInstanceCount: 1,
-          environment: {
-            ENABLE_CLOUDWATCH_METRICS: 'true',
-            ENABLE_METRICS_EMISSION: 'true',
-          },
+          executionRoleArn: props.sagemakerRoleArn,
+          primaryContainer: {
+            image: `${cdk.Aws.ACCOUNT_ID}.dkr.ecr.${cdk.Aws.REGION}.amazonaws.com/${props.modelName}:latest`,
+            modelDataUrl: `s3://${props.projectName}-models/${props.modelName}/model.tar.gz`,
+            environment: {
+              ENABLE_CLOUDWATCH_METRICS: 'true',
+              ENABLE_METRICS_EMISSION: 'true',
+            }
+          }
         },
+        endpointProps: {
+          endpointName: `${props.modelName}-endpoint`,
+          endpointConfigName: `${props.modelName}-config`
+        },
+        endpointConfigProps: {
+          productionVariants: [
+            {
+              initialInstanceCount: 1,
+              instanceType: 'ml.m5.large',
+              modelName: `${props.modelName}-model`,
+              variantName: 'AllTraffic'
+            }
+          ]
+        }
       }
     );
 

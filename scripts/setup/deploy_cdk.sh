@@ -72,10 +72,10 @@ echo "SageMaker role ARN: $SAGEMAKER_ROLE_ARN"
 echo "Stack name: $STACK_NAME"
 echo "Lambda code path: $LAMBDA_CODE_PATH"
 
-# Check if Lambda code exists
+# Check if Lambda code exists and warn if not
 if [ ! -f "$LAMBDA_CODE_PATH/deploy_endpoint_lambda.py" ]; then
-  echo "Lambda code not found at $LAMBDA_CODE_PATH/deploy_endpoint_lambda.py"
-  exit 1
+  echo "Warning: Lambda code not found at $LAMBDA_CODE_PATH/deploy_endpoint_lambda.py"
+  echo "Using default inline Lambda code instead."
 fi
 
 # Navigate to CDK directory

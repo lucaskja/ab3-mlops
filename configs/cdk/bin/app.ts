@@ -2,9 +2,9 @@
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import { MLOpsSageMakerIAMStack } from '../lib/iam-stack';
-import { MLOpsSageMakerEndpointStack } from '../lib/endpoint-stack';
-import { AwsSolutionsBestPracticesStack } from 'cdk-nag';
-import { NagSuppressions } from 'cdk-nag';
+import { EndpointStack } from '../lib/endpoint-stack';
+import { Aspects } from 'aws-cdk-lib';
+import { AwsSolutionsChecks, NagSuppressions } from 'cdk-nag';
 
 const app = new cdk.App();
 
@@ -25,15 +25,17 @@ const iamStack = new MLOpsSageMakerIAMStack(app, 'MLOpsSageMakerIAMStack', {
 });
 
 // Create Endpoint stack with AWS Solutions Constructs
-const endpointStack = new MLOpsSageMakerEndpointStack(app, 'MLOpsSageMakerEndpointStack', {
+const endpointStack = new EndpointStack(app, 'MLOpsSageMakerEndpointStack', {
   projectName,
-  sagemakerExecutionRole: iamStack.sagemakerExecutionRole,
+  modelName: 'yolov11-drone-detection',
+  sagemakerRoleArn: iamStack.sagemakerExecutionRole.roleArn,
+  lambdaCodePath: process.env.LAMBDA_CODE_PATH || './lambda',
   env,
   description: 'SageMaker Endpoint infrastructure using AWS Solutions Constructs',
 });
 
 // Add CDK Nag to all stacks
-cdk.Aspects.of(app).add(new AwsSolutionsBestPracticesStack());
+Aspects.of(app).add(new AwsSolutionsChecks());
 
 // Add specific suppressions for justified exceptions
 NagSuppressions.addStackSuppressions(iamStack, [
