@@ -1,0 +1,8 @@
+{
+    "model_name": "yolov11-drone-detection",
+    "model_artifact_path": "s3://lucaskle-ab3-project-pv/models/yolov11/model.tar.gz",
+    "inference_image": "763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-inference:1.12.1-gpu-py38",
+    "training_image": "763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:1.12.1-gpu-py38",
+    "framework": "pytorch",
+    "framework_version": "1.12.1"
+}

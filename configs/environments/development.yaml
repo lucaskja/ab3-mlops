@@ -1,0 +1,14 @@
+aws:
+  region: us-east-1
+  data_bucket: lucaskle-ab3-project-pv
+sagemaker:
+  domain_name: mlops-sagemaker-demo-dev-domain
+training:
+  instance_type: ml.g4dn.xlarge
+  instance_count: 1
+inference:
+  instance_type: ml.m5.large
+  initial_instance_count: 1
+cost:
+  tags:
+    Environment: Development

@@ -105,10 +105,14 @@ deploy_stack() {
                    Key=ManagedBy,Value=CloudFormation \
             --profile "$AWS_PROFILE"
         
-        print_status "Waiting for stack creation to complete..."
-        aws cloudformation wait stack-create-complete \
-            --stack-name "$STACK_NAME" \
-            --profile "$AWS_PROFILE"
+        if [ "$SKIP_WAIT" = false ]; then
+            print_status "Waiting for stack creation to complete..."
+            aws cloudformation wait stack-create-complete \
+                --stack-name "$STACK_NAME" \
+                --profile "$AWS_PROFILE"
+        else
+            print_status "Skipping wait for stack creation to complete..."
+        fi
         
     else
         print_status "Updating existing CloudFormation stack: $STACK_NAME"
@@ -131,10 +135,14 @@ deploy_stack() {
             }
         
         if [ $? -ne 255 ]; then
-            print_status "Waiting for stack update to complete..."
-            aws cloudformation wait stack-update-complete \
-                --stack-name "$STACK_NAME" \
-                --profile "$AWS_PROFILE"
+            if [ "$SKIP_WAIT" = false ]; then
+                print_status "Waiting for stack update to complete..."
+                aws cloudformation wait stack-update-complete \
+                    --stack-name "$STACK_NAME" \
+                    --profile "$AWS_PROFILE"
+            else
+                print_status "Skipping wait for stack update to complete..."
+            fi
         fi
     fi
     
@@ -211,6 +219,7 @@ usage() {
     echo "  -b, --bucket NAME        Data bucket name (default: $DATA_BUCKET_NAME)"
     echo "  --skip-validation        Skip IAM role validation after deployment"
     echo "  --skip-buckets          Skip S3 bucket creation"
+    echo "  --skip-wait             Skip waiting for CloudFormation stack updates"
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Examples:"
@@ -222,6 +231,7 @@ usage() {
 # Parse command line arguments
 SKIP_VALIDATION=false
 SKIP_BUCKETS=false
+SKIP_WAIT=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -243,6 +253,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-buckets)
             SKIP_BUCKETS=true
+            shift
+            ;;
+        --skip-wait)
+            SKIP_WAIT=true
             shift
             ;;
         -h|--help)

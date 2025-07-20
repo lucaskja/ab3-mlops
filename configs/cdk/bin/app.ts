@@ -17,7 +17,7 @@ const env = {
 };
 
 // Create IAM stack
-const iamStack = new MLOpsSageMakerIAMStack(app, 'MLOpsSageMakerIAMStack', {
+const iamStack = new MLOpsSageMakerIAMStack(app, 'mlops-sagemaker-demo-iam-roles', {
   projectName,
   dataBucketName,
   env,
@@ -25,7 +25,7 @@ const iamStack = new MLOpsSageMakerIAMStack(app, 'MLOpsSageMakerIAMStack', {
 });
 
 // Create Endpoint stack with AWS Solutions Constructs
-const endpointStack = new EndpointStack(app, 'MLOpsSageMakerEndpointStack', {
+const endpointStack = new EndpointStack(app, 'mlops-sagemaker-demo-endpoint-stack', {
   projectName,
   modelName: 'yolov11-drone-detection',
   sagemakerRoleArn: iamStack.sagemakerExecutionRole.roleArn,

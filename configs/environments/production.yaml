@@ -1,0 +1,18 @@
+aws:
+  region: us-east-1
+  data_bucket: lucaskle-ab3-project-pv-prod
+sagemaker:
+  domain_name: mlops-sagemaker-demo-prod-domain
+training:
+  instance_type: ml.g5.2xlarge
+  instance_count: 2
+inference:
+  instance_type: ml.m5.2xlarge
+  initial_instance_count: 2
+  max_instance_count: 5
+monitoring:
+  data_capture_percentage: 20
+  schedule_cron: cron(0 */4 * * ? *)
+cost:
+  tags:
+    Environment: Production

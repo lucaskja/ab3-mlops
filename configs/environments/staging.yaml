@@ -1,0 +1,14 @@
+aws:
+  region: us-east-1
+  data_bucket: lucaskle-ab3-project-pv-staging
+sagemaker:
+  domain_name: mlops-sagemaker-demo-staging-domain
+training:
+  instance_type: ml.g4dn.2xlarge
+  instance_count: 1
+inference:
+  instance_type: ml.m5.xlarge
+  initial_instance_count: 2
+cost:
+  tags:
+    Environment: Staging

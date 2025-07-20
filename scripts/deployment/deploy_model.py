@@ -50,7 +50,7 @@ def deploy_model(args):
                 'SAGEMAKER_REGION': session.region_name
             }
         },
-        ExecutionRoleArn=f"arn:aws:iam::{session.client('sts').get_caller_identity()['Account']}:role/service-role/AmazonSageMaker-ExecutionRole"
+        ExecutionRoleArn=f"arn:aws:iam::{session.client('sts').get_caller_identity()['Account']}:role/mlops-sagemaker-demo-SageMaker-Execution-Role"
     )
     
     # Create endpoint configuration

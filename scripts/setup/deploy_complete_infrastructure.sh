@@ -71,6 +71,8 @@ SKIP_MONITORING=false
 SKIP_MLFLOW=false
 SKIP_EVENTBRIDGE=false
 SKIP_COST_MONITORING=false
+SKIP_AWS_CONFIG=false
+SKIP_STACK_WAIT=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -126,6 +128,14 @@ while [[ $# -gt 0 ]]; do
       SKIP_COST_MONITORING=true
       shift
       ;;
+    --skip-aws-config)
+      SKIP_AWS_CONFIG=true
+      shift
+      ;;
+    --skip-stack-wait)
+      SKIP_STACK_WAIT=true
+      shift
+      ;;
     --help)
       echo "Usage: $0 [OPTIONS]"
       echo ""
@@ -143,6 +153,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --skip-mlflow                Skip MLFlow setup"
       echo "  --skip-eventbridge           Skip EventBridge setup"
       echo "  --skip-cost-monitoring       Skip cost monitoring setup"
+      echo "  --skip-aws-config            Skip AWS CLI configuration prompt"
+      echo "  --skip-stack-wait            Skip waiting for CloudFormation stack updates"
       echo "  --help                       Show this help message"
       exit 0
       ;;
@@ -168,12 +180,25 @@ echo "Email Notifications: $EMAIL_NOTIFICATIONS"
 echo ""
 
 # Check AWS CLI configuration
-print_header "Checking AWS CLI Configuration"
-bash "$SCRIPT_DIR/configure_aws.sh"
+if [ "$SKIP_AWS_CONFIG" = false ]; then
+    print_header "Checking AWS CLI Configuration"
+    bash "$SCRIPT_DIR/configure_aws.sh"
+else
+    print_info "Skipping AWS CLI configuration as requested"
+    # Still set the AWS profile for the session
+    export AWS_PROFILE=$AWS_PROFILE
+    export AWS_DEFAULT_REGION=$AWS_REGION
+fi
 
 # Deploy IAM roles
 print_header "Deploying IAM Roles and Policies"
-bash "$SCRIPT_DIR/deploy_iam_roles.sh" --profile $AWS_PROFILE --stack-name "${PROJECT_NAME}-iam-roles" --bucket $DATA_BUCKET_NAME || {
+# Pass --skip-wait flag if SKIP_STACK_WAIT is true
+SKIP_WAIT_FLAG=""
+if [ "$SKIP_STACK_WAIT" = true ]; then
+    SKIP_WAIT_FLAG="--skip-wait"
+fi
+
+bash "$SCRIPT_DIR/deploy_iam_roles.sh" --profile $AWS_PROFILE --stack-name "${PROJECT_NAME}-iam-roles" --bucket $DATA_BUCKET_NAME $SKIP_WAIT_FLAG || {
     ERROR_CODE=$?
     if grep -q "No updates are to be performed" <<< "$(cat /tmp/deploy_iam_error 2>/dev/null)"; then
         print_warning "No updates to be performed on the IAM stack. Continuing..."
@@ -197,10 +222,17 @@ fi
 
 # Deploy CDK stacks
 print_header "Deploying CDK Stacks"
-if bash "$SCRIPT_DIR/deploy_cdk.sh" --profile $AWS_PROFILE --region $AWS_REGION --stack-name "${PROJECT_NAME}-endpoint-stack"; then
+# Try to deploy the CDK stack, but handle the case where resources already exist
+if bash "$SCRIPT_DIR/deploy_cdk.sh" --profile $AWS_PROFILE --region $AWS_REGION --stack-name "${PROJECT_NAME}-endpoint-stack" 2>&1 | tee /tmp/cdk_deploy_output.log; then
   print_success "CDK deployment completed successfully"
 else
-  print_warning "CDK deployment failed. Continuing with the rest of the deployment..."
+  ERROR_CODE=$?
+  if grep -q "already exists" /tmp/cdk_deploy_output.log; then
+    print_warning "Some resources already exist. This is expected if you've deployed before."
+    print_info "Continuing with the rest of the deployment..."
+  else
+    print_warning "CDK deployment failed with code $ERROR_CODE. Continuing with the rest of the deployment..."
+  fi
 fi
 
 # Validate CDK deployment if not skipped
@@ -215,12 +247,24 @@ fi
 # Setup MLFlow if not skipped
 if [ "$SKIP_MLFLOW" = false ]; then
     print_header "Setting up MLFlow on SageMaker"
-    $PYTHON "$SCRIPT_DIR/setup_mlflow_sagemaker.py" --create-server --aws-profile $AWS_PROFILE --region $AWS_REGION --artifact-bucket "${PROJECT_NAME}-mlflow-artifacts"
+    # Check if the MlflowServer class is available in the SageMaker SDK
+    if $PYTHON -c "from sagemaker.mlflow import MlflowServer" 2>/dev/null; then
+        $PYTHON "$SCRIPT_DIR/setup_mlflow_sagemaker.py" --create-server --aws-profile $AWS_PROFILE --region $AWS_REGION --artifact-bucket "${PROJECT_NAME}-mlflow-artifacts"
+    else
+        print_warning "MlflowServer class not found in SageMaker SDK. Skipping MLFlow setup."
+        print_info "You may need to update the SageMaker SDK or use a different approach for MLFlow integration."
+    fi
 fi
 
 # Setup SageMaker Project if not skipped
 print_header "Setting up SageMaker Project"
-$PYTHON "$SCRIPT_DIR/setup_sagemaker_project.py" --profile $AWS_PROFILE --project-name $PROJECT_NAME --s3-bucket $DATA_BUCKET_NAME
+if $PYTHON "$SCRIPT_DIR/setup_sagemaker_project.py" --profile $AWS_PROFILE --project-name $PROJECT_NAME --s3-bucket $DATA_BUCKET_NAME; then
+  print_success "SageMaker Project setup completed successfully"
+else
+  ERROR_CODE=$?
+  print_warning "SageMaker Project setup failed with code $ERROR_CODE. This might be expected if the project already exists."
+  print_info "Continuing with the rest of the deployment..."
+fi
 
 # Deploy model to endpoint
 print_header "Deploying Model to SageMaker Endpoint"
@@ -241,15 +285,30 @@ if [ ! -f "$MODEL_INFO_PATH" ]; then
 EOF
 fi
 
-$PYTHON "$PROJECT_ROOT/scripts/deployment/deploy_model.py" --profile $AWS_PROFILE --model-info $MODEL_INFO_PATH --endpoint-name $ENDPOINT_NAME --endpoint-type staging --instance-type ml.g4dn.xlarge --instance-count 1
+# Check if the model data exists in S3
+if aws s3 ls "s3://$DATA_BUCKET_NAME/models/yolov11/model.tar.gz" --profile $AWS_PROFILE &> /dev/null; then
+    print_info "Model data found in S3 bucket"
+    $PYTHON "$PROJECT_ROOT/scripts/deployment/deploy_model.py" --profile $AWS_PROFILE --model-info $MODEL_INFO_PATH --endpoint-name $ENDPOINT_NAME --endpoint-type staging --instance-type ml.g4dn.xlarge --instance-count 1
+else
+    print_warning "Model data not found in S3 bucket. Skipping model deployment."
+    print_info "To deploy the model, upload the model data to s3://$DATA_BUCKET_NAME/models/yolov11/model.tar.gz"
+fi
 
 # Setup model monitoring if not skipped
 if [ "$SKIP_MONITORING" = false ]; then
     print_header "Setting up Model Monitoring"
-    $PYTHON "$PROJECT_ROOT/scripts/monitoring/setup_model_monitoring.py" --profile $AWS_PROFILE --endpoint-name $ENDPOINT_NAME --monitoring-schedule-name $MONITORING_SCHEDULE_NAME
     
-    print_header "Setting up SageMaker Clarify"
-    $PYTHON "$PROJECT_ROOT/scripts/training/setup_clarify_explainability.py" --profile $AWS_PROFILE --endpoint-name $ENDPOINT_NAME
+    # Check if endpoint exists
+    if aws sagemaker describe-endpoint --endpoint-name $ENDPOINT_NAME --profile $AWS_PROFILE &> /dev/null; then
+        print_info "Endpoint $ENDPOINT_NAME exists, setting up monitoring..."
+        $PYTHON "$PROJECT_ROOT/scripts/monitoring/setup_model_monitoring.py" --profile $AWS_PROFILE --endpoint-name $ENDPOINT_NAME --monitoring-schedule-name $MONITORING_SCHEDULE_NAME
+        
+        print_header "Setting up SageMaker Clarify"
+        $PYTHON "$PROJECT_ROOT/scripts/training/setup_clarify_explainability.py" --profile $AWS_PROFILE --endpoint-name $ENDPOINT_NAME
+    else
+        print_warning "Endpoint $ENDPOINT_NAME does not exist. Skipping model monitoring setup."
+        print_info "To set up model monitoring, deploy the model first."
+    fi
 fi
 
 # Setup EventBridge rules and SNS notifications if not skipped
@@ -261,16 +320,27 @@ if [ "$SKIP_EVENTBRIDGE" = false ] && [ -n "$EMAIL_NOTIFICATIONS" ]; then
 import sys
 sys.path.append('$PROJECT_ROOT')
 from src.pipeline.event_bridge_integration import create_pipeline_failure_alert
-create_pipeline_failure_alert('${PROJECT_NAME}-pipeline', ['$EMAIL_NOTIFICATIONS'], '$AWS_PROFILE')
+try:
+    create_pipeline_failure_alert('${PROJECT_NAME}-pipeline', ['$EMAIL_NOTIFICATIONS'], '$AWS_PROFILE')
+except Exception as e:
+    print(f'Warning: Failed to create pipeline failure alert: {str(e)}')
+    print('Continuing with the rest of the deployment...')
 "
     
-    # Create model drift alert
-    $PYTHON -c "
+    # Check if endpoint exists before creating model drift alert
+    if aws sagemaker describe-endpoint --endpoint-name $ENDPOINT_NAME --profile $AWS_PROFILE &> /dev/null; then
+        print_info "Endpoint $ENDPOINT_NAME exists, setting up model drift alert..."
+        # Create model drift alert
+        $PYTHON -c "
 import sys
 sys.path.append('$PROJECT_ROOT')
 from src.pipeline.event_bridge_integration import create_model_drift_alert
 create_model_drift_alert('$ENDPOINT_NAME', ['$EMAIL_NOTIFICATIONS'], '$AWS_PROFILE')
 "
+    else
+        print_warning "Endpoint $ENDPOINT_NAME does not exist. Skipping model drift alert setup."
+        print_info "To set up model drift alerts, deploy the model first."
+    fi
 fi
 
 # Setup cost monitoring if not skipped
@@ -282,19 +352,23 @@ if [ "$SKIP_COST_MONITORING" = false ]; then
 import sys
 sys.path.append('$PROJECT_ROOT')
 from src.monitoring.cost_tracking import CostTracker
-tracker = CostTracker(profile_name='$AWS_PROFILE')
-report = tracker.generate_cost_report(output_format='html', output_file='$PROJECT_ROOT/cost_report.html')
-print('Cost report generated at $PROJECT_ROOT/cost_report.html')
+try:
+    tracker = CostTracker(profile_name='$AWS_PROFILE')
+    report = tracker.generate_cost_report(output_format='html', output_file='$PROJECT_ROOT/cost_report.html')
+    print('Cost report generated at $PROJECT_ROOT/cost_report.html')
 
-# Create cost budget if email is provided
-if '$EMAIL_NOTIFICATIONS':
-    tracker.create_cost_budget(
-        budget_name='${PROJECT_NAME}-monthly-budget',
-        budget_amount=100.0,  # $100 monthly budget
-        notification_email='$EMAIL_NOTIFICATIONS',
-        threshold_percent=80.0
-    )
-    print('Cost budget created with notification to $EMAIL_NOTIFICATIONS')
+    # Create cost budget if email is provided
+    if '$EMAIL_NOTIFICATIONS':
+        tracker.create_cost_budget(
+            budget_name='${PROJECT_NAME}-monthly-budget',
+            budget_amount=100.0,  # $100 monthly budget
+            notification_email='$EMAIL_NOTIFICATIONS',
+            threshold_percent=80.0
+        )
+        print('Cost budget created with notification to $EMAIL_NOTIFICATIONS')
+except Exception as e:
+    print(f'Warning: Failed to set up cost monitoring: {str(e)}')
+    print('Continuing with the rest of the deployment...')
 "
 fi
 

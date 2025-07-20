@@ -95,12 +95,11 @@ export LAMBDA_CODE_PATH=$LAMBDA_CODE_PATH
 echo "Synthesizing CDK stack to check for errors..."
 if npx cdk synth $STACK_NAME --app "npx ts-node bin/app.ts"; then
   echo "CDK synthesis successful, proceeding with deployment..."
+  # Note: The app.ts file doesn't use CfnParameters, so we don't pass parameters
+  # Instead, we set environment variables that the app.ts file uses
+  export CDK_DEFAULT_REGION=$AWS_REGION
   npx cdk deploy $STACK_NAME \
     --app "npx ts-node bin/app.ts" \
-    --parameters projectName=$PROJECT_NAME \
-    --parameters modelName=$MODEL_NAME \
-    --parameters sagemakerRoleArn=$SAGEMAKER_ROLE_ARN \
-    --parameters lambdaCodePath=$LAMBDA_CODE_PATH \
     --require-approval never
 else
   echo "CDK synthesis failed. Skipping deployment."

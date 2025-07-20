@@ -165,7 +165,7 @@ def setup_sagemaker_project(args):
             },
             Tags=[
                 {
-                    'Key': 'sagemaker:project-name',
+                    'Key': 'Project',
                     'Value': args.project_name
                 }
             ]

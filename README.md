@@ -231,9 +231,9 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-> **Note:** The setup and deployment scripts now require a virtual environment named `venv` in the project root directory. The scripts will automatically check for this environment and use the Python interpreter from it.
+> **Note:** The setup and deployment scripts automatically check for a virtual environment named `venv` in the project root directory. The scripts will use the Python interpreter from this environment if available, otherwise they will fall back to using the system's Python3.
 
-> **Note:** The setup and deployment scripts now require a virtual environment named `venv` in the project root directory. The scripts will automatically check for this environment and use the Python interpreter from it.
+> **Note:** The setup and deployment scripts now require a virtual environment named `venv` in the project root directory. The scripts will automatically check for this environment and use the Python interpreter from it if available, otherwise they will fall back to using the system's Python3.
 
 #### Option 1: Complete Infrastructure Deployment (Recommended)
 
@@ -243,29 +243,43 @@ Use the complete infrastructure deployment script to set up all required AWS res
 ./scripts/setup/deploy_complete_infrastructure.sh --email your.email@example.com
 ```
 
-This script will automatically check for the required `venv` virtual environment before proceeding.
-
-This script will automatically check for the required `venv` virtual environment before proceeding.
-
-This script will automatically check for the required `venv` virtual environment before proceeding.
+This script will automatically check for and use the Python interpreter from the `venv` virtual environment if available, otherwise it will fall back to using the system's Python3.
 
 This script will:
 - Configure AWS CLI with the "ab" profile
-- Deploy IAM roles and policies
-- Deploy CDK stacks for endpoints and other resources
+- Deploy IAM roles and policies with robust error handling
+- Deploy CDK stacks for endpoints and other resources with fallback options (like using default inline Lambda code)
 - Set up MLFlow on SageMaker
 - Set up SageMaker Projects for CI/CD
 - Deploy a model to a SageMaker endpoint
 - Configure model monitoring and SageMaker Clarify
 - Set up EventBridge rules and SNS notifications
 - Configure cost monitoring and budgets
-- Validate the deployment
+- Validate the deployment with graceful handling of errors and missing validation scripts
 
 You can customize the deployment with various options:
 
 ```bash
 ./scripts/setup/deploy_complete_infrastructure.sh --help
 ```
+
+The script supports additional options for more flexible deployments:
+
+- `--skip-aws-config`: Skip the AWS CLI configuration prompt (useful for automated deployments)
+- `--skip-stack-wait`: Skip waiting for CloudFormation stack updates (speeds up deployment significantly)
+- `--skip-validation`: Skip validation steps for faster deployment
+- `--skip-monitoring`: Skip model monitoring setup
+- `--skip-mlflow`: Skip MLFlow setup
+- `--skip-eventbridge`: Skip EventBridge setup
+- `--skip-cost-monitoring`: Skip cost monitoring setup
+
+For example, to deploy quickly without waiting for stack updates or AWS configuration prompts:
+
+```bash
+./scripts/setup/deploy_complete_infrastructure.sh --profile ab --skip-aws-config --skip-stack-wait
+```
+
+This will significantly speed up the deployment process by not waiting for CloudFormation stack updates to complete before proceeding to the next steps.
 
 #### Option 2: Step-by-Step Manual Setup
 
@@ -281,18 +295,31 @@ If you prefer to set up components individually:
 ./scripts/setup/deploy_iam_roles.sh
 ```
 
-3. Validate the IAM setup:
+   The script includes error handling that allows the process to continue even when non-critical errors occur, such as when no updates are needed for an existing stack. The script now supports the `--skip-wait` flag to skip waiting for CloudFormation stack updates, which can speed up deployment.
+
+3. Validate the IAM setup (if the validation script exists):
 ```bash
 venv/bin/python scripts/setup/validate_iam_roles.py --profile ab
 ```
 
+   The script will display the command being executed and then run the validation.
+
 4. Deploy CDK infrastructure:
 ```bash
-cd configs/cdk
-npm install
-cdk deploy --profile ab
-cd ../..
+./scripts/setup/deploy_cdk.sh --profile ab
 ```
+
+This script will:
+- Load project configuration using the virtual environment Python if available
+- Install CDK dependencies if needed
+- Check for Lambda code and use default inline code if not found (improved error handling)
+- Synthesize the CDK stack to check for errors before deployment
+- Deploy the stack with the necessary parameters
+- Update the project configuration with the Lambda function ARN
+
+   The script now includes improved error handling that allows deployment to continue even when Lambda code is not found at the specified path, using default inline Lambda code instead.
+
+   You can also use the `--skip-wait` option to skip waiting for CloudFormation stack updates, which can speed up the deployment process significantly.
 
 5. Set up SageMaker Projects for CI/CD:
 ```bash
@@ -730,6 +757,24 @@ def test_pipeline_component_integration(self):
 ```
 
 These tests ensure that the pipeline components work together correctly and that the pipeline can handle various configurations and error conditions.
+
+## Deployment Optimization
+
+To speed up the deployment process, especially during development and testing, you can use these flags:
+
+### IAM Roles Deployment
+```bash
+# Skip waiting for CloudFormation stack updates
+./scripts/setup/deploy_iam_roles.sh --skip-wait
+```
+
+### Complete Infrastructure Deployment
+```bash
+# Skip waiting for all CloudFormation stack updates
+./scripts/setup/deploy_complete_infrastructure.sh --skip-stack-wait
+```
+
+These flags significantly speed up deployment by not waiting for CloudFormation operations to complete before proceeding to the next steps. This is particularly useful during development when you're making frequent changes to the infrastructure.
 
 ## Cleanup Procedures
 
