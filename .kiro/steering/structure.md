@@ -31,10 +31,14 @@
 │   ├── hooks/               # Kiro hooks for automation
 │   ├── settings/            # Kiro settings
 │   ├── specs/               # Kiro specifications
-│   │   └── mlops-sagemaker-demo/ # MLOps SageMaker demo spec
-│   │       ├── design.md    # Design document
-│   │       ├── requirements.md # Requirements document
-│   │       └── tasks.md     # Implementation tasks
+│   │   ├── mlops-sagemaker-demo/ # MLOps SageMaker demo spec
+│   │   │   ├── design.md    # Design document
+│   │   │   ├── requirements.md # Requirements document
+│   │   │   └── tasks.md     # Implementation tasks
+│   │   └── sagemaker-core-setup/ # Core SageMaker setup spec
+│   │       ├── design.md    # Design document for core setup
+│   │       ├── requirements.md # Requirements for core setup
+│   │       └── tasks.md     # Implementation tasks for core setup
 │   └── steering/            # Kiro steering documents
 │       ├── structure.md     # Project structure documentation
 │       ├── tech.md          # Technology stack documentation
@@ -45,6 +49,10 @@
 │       └── aws_sagemaker_mlops_reference.md # AWS SageMaker MLOps reference
 ├── notebooks/               # Jupyter notebooks for development
 │   ├── README.md            # Notebooks documentation
+│   ├── data-scientist-core.ipynb # Core notebook for Data Scientists
+│   ├── data-scientist-core-enhanced.ipynb # Enhanced core notebook with MLFlow integration
+│   ├── ml-engineer-core.ipynb # Core notebook for ML Engineers
+│   ├── ml-engineer-core-enhanced.ipynb # Enhanced core notebook with MLFlow and Model Registry
 │   ├── data-exploration/    # Data analysis and profiling notebooks
 │   │   ├── data-profiling.ipynb # Data profiling notebook
 │   │   └── dataset-analysis.ipynb # Dataset analysis notebook
@@ -75,15 +83,25 @@
 │   ├── preprocessing/       # Data preprocessing scripts
 │   │   └── preprocess_yolo_data.py # YOLO data preprocessing script
 │   ├── setup/               # Environment and AWS setup scripts
+│   │   ├── README.md        # Setup scripts documentation
+│   │   ├── cleanup_core_sagemaker.sh # Core SageMaker cleanup script
 │   │   ├── cleanup_resources.sh # Resource cleanup script
 │   │   ├── configure_aws.sh # AWS configuration script
 │   │   ├── deploy_cdk.sh    # CDK deployment script
+│   │   ├── deploy_complete_infrastructure.sh # Complete infrastructure deployment script
+│   │   ├── deploy_complete_infrastructure_modified.sh # Modified infrastructure deployment script
+│   │   ├── deploy_core_sagemaker.sh # Core SageMaker deployment script
 │   │   ├── deploy_iam_roles.sh # IAM roles deployment script
+│   │   ├── deploy_iam_roles_temp.sh # Temporary IAM roles deployment script
+│   │   ├── deploy_notebooks_to_studio.py # Deploy core notebooks to SageMaker Studio
 │   │   ├── reorganize_s3_data.py # S3 data reorganization script
 │   │   ├── setup_mlflow_sagemaker.py # MLFlow SageMaker setup script
+│   │   ├── setup_sagemaker_project.py # SageMaker project setup script
 │   │   ├── validate_cdk_deployment.sh # CDK deployment validation script
 │   │   ├── validate_cdk_security.sh # CDK security validation script
 │   │   ├── validate_cleanup.py # Cleanup validation script
+│   │   ├── validate_core_sagemaker.py # Core SageMaker validation script
+│   │   ├── validate_deployment.py # Deployment validation script
 │   │   └── validate_iam_roles.py # IAM roles validation script
 │   └── training/            # Training execution scripts
 │       ├── analyze_model_monitoring.py # Model monitoring analysis script
@@ -134,15 +152,27 @@
 │       ├── model_monitor.py # SageMaker Model Monitor
 │       ├── model_monitor_integration.py # Model monitoring integration
 │       ├── sagemaker_pipeline.py # SageMaker Pipeline implementation
-│       └── sagemaker_training.py # SageMaker training job management
+│       ├── sagemaker_pipeline_factory.py # SageMaker Pipeline factory
+│       ├── sagemaker_training.py # SageMaker training job management
+│       └── script_templates.py # Script templates for pipeline steps
 ├── tests/                  # Unit and integration tests
 │   ├── __init__.py         # Package initialization
 │   ├── ground_truth/       # Tests for Ground Truth utilities
 │   │   └── test_ground_truth_utils.py # Tests for Ground Truth utilities
 │   ├── test_automated_retraining_trigger.py # Tests for automated retraining functionality
+│   ├── test_automated_retraining_trigger_new.py # New tests for automated retraining
+│   ├── test_data_profiler.py # Tests for data profiler
+│   ├── test_drift_detection.py # Tests for drift detection
+│   ├── test_endpoint_performance.py # Tests for endpoint performance
 │   ├── test_error_recovery.py # Tests for error recovery functionality
 │   ├── test_event_bridge_integration.py # Tests for EventBridge integration
 │   ├── test_mlflow_integration.py # Tests for MLFlow integration
+│   ├── test_model_monitor.py # Tests for model monitor
+│   ├── test_model_monitor_integration.py # Tests for model monitor integration
+│   ├── test_monitoring_alerting_integration.py # Tests for monitoring alerting
+│   ├── test_pipeline_integration.py # Tests for pipeline integration
+│   ├── test_role_based_access.py # Tests for role-based access
+│   ├── test_script_templates.py # Tests for script templates
 │   ├── test_yolo_preprocessor.py # Tests for YOLO preprocessing
 │   └── test_yolov11_trainer.py # Tests for YOLOv11 trainer
 ├── mlruns/                 # Local MLFlow tracking data
@@ -151,6 +181,7 @@
 │   └── detect/             # Detection model runs
 │       └── yolov11_training/ # YOLOv11 training runs
 ├── README.md               # Project README
+├── cdk-fixes-summary.md    # Summary of CDK fixes
 └── requirements.txt        # Python dependencies
 ```
 
@@ -173,15 +204,17 @@
 - **Testing Layer** (`tests/`): Unit and integration tests for all components
 - **Documentation Layer** (`docs/`): Architecture documentation and user guides
 - **Demo Layer** (`notebooks/demo/` and `scripts/demo/`): End-to-end workflow demonstrations for different user roles
+- **Core Setup Layer** (`scripts/setup/`): Core SageMaker infrastructure deployment and management
 
 ### Naming Conventions
 - **Files**: snake_case for Python files
 - **Classes**: PascalCase (e.g., `DroneImageryProfiler`, `YOLOv11Validator`, `MLFlowSageMakerIntegration`)
 - **Functions**: snake_case with descriptive names
 - **Constants**: UPPER_SNAKE_CASE in configuration files
-- **AWS Resources**: Prefixed with project name (`mlops-sagemaker-demo-`)
+- **AWS Resources**: Prefixed with project name (`mlops-sagemaker-demo-` or `sagemaker-core-setup-`)
 - **Test Files**: Prefixed with `test_` followed by the module name being tested
 - **Notebooks**: Descriptive names with hyphens for directories and underscores for files
+- **Core Notebooks**: Root-level notebooks with role-specific names (e.g., `data-scientist-core.ipynb`, `ml-engineer-core.ipynb`)
 
 ### Import Patterns
 - **Relative Imports**: Use relative imports within modules
@@ -190,6 +223,7 @@
 - **AWS SDK**: Import boto3 and sagemaker modules with explicit session management
 - **Project Modules**: Import from src modules using absolute imports
 - **Demo Notebooks**: Import project modules using sys.path.append('..') to access src modules
+- **Core Notebooks**: Direct imports of standard libraries and boto3 with minimal dependencies
 
 ## File Conventions
 
@@ -218,6 +252,11 @@
 - **Visualization**: Include data and result visualization with matplotlib and other libraries
 - **Demo Notebooks**: Comprehensive end-to-end workflows in the `notebooks/demo/` directory
 - **Role-Specific Notebooks**: Separate notebooks for Data Scientist and ML Engineer workflows
+- **Core Notebooks**: Simplified notebooks at the root level for essential functionality:
+  - `data-scientist-core.ipynb`: Data exploration and preparation for YOLOv11 training
+  - `data-scientist-core-enhanced.ipynb`: Enhanced data exploration with MLFlow experiment tracking
+  - `ml-engineer-core.ipynb`: Pipeline execution and management for YOLOv11 models
+  - `ml-engineer-core-enhanced.ipynb`: Enhanced pipeline management with MLFlow and Model Registry integration
 - **Interactive Dashboards**: Advanced notebooks like `create_labeling_job_interactive.ipynb` implement complete dashboard interfaces with tabs, progress tracking, and real-time updates
 
 ### Scripts
@@ -227,6 +266,11 @@
 - **Validation**: Check prerequisites before execution
 - **AWS Profile**: Always use the "ab" profile for AWS operations
 - **Demo Scripts**: Setup and teardown scripts in `scripts/demo/` for demonstration environments
+- **Core Setup Scripts**: Simplified deployment scripts in `scripts/setup/` for core SageMaker infrastructure:
+  - `deploy_core_sagemaker.sh`: Deploys essential SageMaker components
+  - `deploy_notebooks_to_studio.py`: Deploys core notebooks to SageMaker Studio user profiles
+  - `validate_core_sagemaker.py`: Validates core SageMaker deployment
+  - `cleanup_core_sagemaker.sh`: Removes core SageMaker resources
 
 ### Infrastructure as Code
 - **CDK**: TypeScript-based AWS CDK for infrastructure definition
@@ -256,6 +300,23 @@
 - **Validation**: Run validation scripts after deployment
 - **Security**: Validate security with CDK Nag and custom validation scripts
 - **Cleanup**: Use cleanup scripts to remove resources when no longer needed
+
+### Core SageMaker Setup Workflow
+1. **Deploy Core Infrastructure**: Use `deploy_core_sagemaker.sh` to set up essential components
+2. **Deploy Notebooks**: Use `deploy_notebooks_to_studio.py` to deploy core notebooks to SageMaker Studio user profiles
+3. **Validate Deployment**: Run `validate_core_sagemaker.py` to verify resources
+4. **Access SageMaker Studio**: Log in with appropriate user profile (Data Scientist or ML Engineer)
+5. **Use Core Notebooks**: Choose between basic or enhanced notebooks based on requirements:
+   - **Basic**: `data-scientist-core.ipynb` or `ml-engineer-core.ipynb` for essential functionality
+   - **Enhanced**: `data-scientist-core-enhanced.ipynb` or `ml-engineer-core-enhanced.ipynb` for MLFlow integration
+6. **Clean Up Resources**: Use `cleanup_core_sagemaker.sh` when no longer needed
+
+### Enhanced Notebooks Features
+- **MLFlow Integration**: Enhanced notebooks include comprehensive MLFlow experiment tracking
+- **Model Registry**: ML Engineer enhanced notebook includes SageMaker Model Registry integration
+- **Artifact Management**: Automatic logging of visualizations, metrics, and model artifacts
+- **Experiment Comparison**: Built-in functionality to compare experiments and model versions
+- **Production Readiness**: Enhanced notebooks prepare models for production deployment workflows
 
 ### Automated Retraining Workflow
 - **Drift Detection**: Configure Model Monitor with `DriftDetector` from `src.monitoring.drift_detection`
@@ -324,11 +385,22 @@
 - **Cost Management**: Use `estimate_labeling_cost` to control labeling expenses
 - **Interactive Notebooks**: Use notebooks in `notebooks/data-labeling/` for interactive job creation
 
+### Core SageMaker Operations
+- **Deployment**: Use `scripts/setup/deploy_core_sagemaker.sh` with appropriate options
+- **Notebook Deployment**: Use `scripts/setup/deploy_notebooks_to_studio.py` to deploy core notebooks to SageMaker Studio
+- **Validation**: Use `scripts/setup/validate_core_sagemaker.py` to verify deployment
+- **Cleanup**: Use `scripts/setup/cleanup_core_sagemaker.sh` to remove resources
+- **Data Exploration**: Use `notebooks/data-scientist-core.ipynb` or `notebooks/data-scientist-core-enhanced.ipynb` for data analysis
+- **Pipeline Management**: Use `notebooks/ml-engineer-core.ipynb` or `notebooks/ml-engineer-core-enhanced.ipynb` for pipeline execution
+
 ### Role-Based Workflows
-- **Data Scientists**: Use `notebooks/demo/data_scientist_workflow.ipynb` for data exploration, labeling, and model development
-  - Data exploration and profiling with interactive widgets
-  - Ground Truth labeling job creation and management
-  - Model development with MLFlow experiment tracking
-  - Model evaluation on test datasets
-- **ML Engineers**: Use `notebooks/demo/ml_engineer_workflow.ipynb` for pipeline development, deployment, and monitoring
+- **Data Scientists**: Use core notebooks for essential functionality or demo notebooks for comprehensive workflows:
+  - **Core**: `notebooks/data-scientist-core.ipynb` for basic data exploration and preparation
+  - **Enhanced**: `notebooks/data-scientist-core-enhanced.ipynb` for data exploration with MLFlow experiment tracking
+  - **Comprehensive**: `notebooks/demo/data_scientist_workflow.ipynb` for complete workflow demonstration
+  - Features: Data exploration and profiling with interactive widgets, Ground Truth labeling job creation and management, Model development with MLFlow experiment tracking, Model evaluation on test datasets
+- **ML Engineers**: Use core notebooks for essential functionality or demo notebooks for comprehensive workflows:
+  - **Core**: `notebooks/ml-engineer-core.ipynb` for basic pipeline execution and management
+  - **Enhanced**: `notebooks/ml-engineer-core-enhanced.ipynb` for pipeline management with MLFlow and Model Registry integration
+  - **Comprehensive**: `notebooks/demo/ml_engineer_workflow.ipynb` for complete workflow demonstration
 - **End-to-End Demo**: Use `notebooks/demo/end_to_end_mlops_workflow.ipynb` for complete workflow demonstration
