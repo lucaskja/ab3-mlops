@@ -52,8 +52,25 @@ class CorePipelineCreator:
         self.sagemaker_session = sagemaker.Session(boto_session=self.session)
         self.sagemaker_client = self.session.client('sagemaker')
         
-        # Get execution role
-        self.execution_role = self.sagemaker_session.get_caller_identity_arn()
+        # Get execution role - try to find SageMaker execution role first
+        try:
+            # Try to get the SageMaker execution role from the MLOps demo
+            iam_client = self.session.client('iam')
+            role_name = "mlops-sagemaker-demo-SageMaker-Execution-Role"
+            role_response = iam_client.get_role(RoleName=role_name)
+            self.execution_role = role_response['Role']['Arn']
+            logger.info(f"Using SageMaker execution role: {self.execution_role}")
+        except Exception as e:
+            logger.warning(f"Could not find SageMaker execution role: {e}")
+            # Fallback to getting the default SageMaker execution role
+            try:
+                self.execution_role = sagemaker.get_execution_role()
+            except Exception as e2:
+                logger.error(f"Could not get execution role: {e2}")
+                # Create a basic execution role ARN format (this will fail if role doesn't exist)
+                account_id = self.session.client('sts').get_caller_identity()['Account']
+                self.execution_role = f"arn:aws:iam::{account_id}:role/mlops-sagemaker-demo-SageMaker-Execution-Role"
+                logger.warning(f"Using constructed role ARN: {self.execution_role}")
         
         # Project configuration
         self.project_name = "sagemaker-core-setup"
@@ -167,6 +184,22 @@ def find_data_yaml(data_dir):
 
 def main():
     """Main training function."""
+    # Install dependencies first
+    import subprocess
+    import sys
+    
+    logger.info("Installing required dependencies...")
+    try:
+        subprocess.check_call([
+            sys.executable, "-m", "pip", "install", 
+            "ultralytics>=8.0.0", "torch>=2.0.0", "torchvision>=0.15.0", 
+            "PyYAML>=6.0", "Pillow>=9.0.0", "opencv-python>=4.8.0"
+        ])
+        logger.info("Dependencies installed successfully")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to install dependencies: {e}")
+        # Continue anyway, dependencies might already be installed
+    
     args = parse_args()
     
     logger.info("Starting YOLOv11 training")
@@ -281,6 +314,22 @@ def parse_args():
 
 def main():
     """Main evaluation function."""
+    # Install dependencies first
+    import subprocess
+    import sys
+    
+    logger.info("Installing required dependencies...")
+    try:
+        subprocess.check_call([
+            sys.executable, "-m", "pip", "install", 
+            "ultralytics>=8.0.0", "torch>=2.0.0", "torchvision>=0.15.0", 
+            "PyYAML>=6.0", "Pillow>=9.0.0", "opencv-python>=4.8.0"
+        ])
+        logger.info("Dependencies installed successfully")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to install dependencies: {e}")
+        # Continue anyway, dependencies might already be installed
+    
     args = parse_args()
     
     logger.info("Starting YOLOv11 evaluation")
@@ -371,6 +420,22 @@ if __name__ == "__main__":
         """Create training step."""
         logger.info("Creating training step")
         
+        # Create requirements.txt for dependencies
+        requirements_content = """ultralytics>=8.0.0
+torch>=2.0.0
+torchvision>=0.15.0
+PyYAML>=6.0
+Pillow>=9.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+"""
+        
+        # Write requirements.txt to the same directory as training script
+        requirements_path = os.path.join(os.path.dirname(training_script), "requirements.txt")
+        with open(requirements_path, 'w') as f:
+            f.write(requirements_content)
+        
         # Create PyTorch estimator
         estimator = PyTorch(
             entry_point=os.path.basename(training_script),
@@ -378,8 +443,8 @@ if __name__ == "__main__":
             role=self.execution_role,
             instance_count=parameters['instance_count'],
             instance_type=parameters['instance_type'],
-            framework_version="1.13.1",
-            py_version="py39",
+            framework_version="2.0.0",
+            py_version="py310",
             hyperparameters={
                 "model-variant": parameters['model_variant'],
                 "epochs": parameters['epochs'],
@@ -389,8 +454,7 @@ if __name__ == "__main__":
             },
             sagemaker_session=self.sagemaker_session,
             volume_size=30,
-            max_run=3600,  # 1 hour
-            dependencies=["ultralytics", "PyYAML"]
+            max_run=3600  # 1 hour
         )
         
         # Create training step
