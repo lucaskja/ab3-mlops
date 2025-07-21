@@ -94,6 +94,20 @@ Resources:
                   - 'sagemaker:StopLabelingJob'
                 Resource: '*'
               
+              # SageMaker Studio App Management (restricted to data-science-space)
+              - Effect: Allow
+                Action:
+                  - 'sagemaker:CreateApp'
+                  - 'sagemaker:DeleteApp'
+                  - 'sagemaker:DescribeApp'
+                  - 'sagemaker:ListApps'
+                  - 'sagemaker:DescribeSpace'
+                  - 'sagemaker:ListSpaces'
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'sagemaker:SpaceName': 'data-science-space'
+              
               # CloudWatch Logs for notebook instances
               - Effect: Allow
                 Action:
