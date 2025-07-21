@@ -1,12 +1,12 @@
-# Ml Engineer Notebooks
+# ML Engineer Notebooks
 
-Core notebooks for ML Engineers
+Core notebooks for ML Engineers with MLflow integration and Model Registry support.
 
 ## Notebooks Included
 
 ### ml-engineer-core-enhanced.ipynb
 
-- **Purpose**: Core functionality for ml engineer
+- **Purpose**: Pipeline execution and model management with comprehensive MLflow tracking
 - **Location**: `/home/sagemaker-user/ml-engineer-notebooks/ml-engineer-core-enhanced.ipynb`
 
 ## Getting Started
@@ -22,7 +22,8 @@ Core notebooks for ML Engineers
 3. **Prerequisites**
    - AWS CLI configured with "ab" profile
    - Access to S3 bucket: `lucaskle-ab3-project-pv`
-   - Appropriate IAM permissions for your role
+   - Appropriate IAM permissions for your role (MLEngineerRole)
+   - SageMaker managed MLflow tracking server access
 
 4. **Running Notebooks**
    - Open any notebook by double-clicking
@@ -32,29 +33,39 @@ Core notebooks for ML Engineers
 ## Notebook Descriptions
 
 ### ML Engineer Core Enhanced
-- **Purpose**: Training pipeline execution with MLFlow and Model Registry
+- **Purpose**: Training pipeline execution with MLflow and Model Registry integration
 - **Features**:
   - Pipeline configuration and execution
   - SageMaker training job management
-  - MLFlow experiment tracking
-  - Model Registry integration
+  - MLflow experiment tracking with SageMaker managed server
+  - Model Registry integration with approval workflows
   - Training monitoring and metrics
 
 ## MLFlow Integration
 
 All notebooks include MLFlow integration for experiment tracking:
 
-- **Experiment Tracking**: All runs are automatically tracked
+- **Connection Method**: Uses tracking server ARN format for SageMaker managed MLflow
+- **Experiment Tracking**: All training runs are automatically tracked
 - **Parameter Logging**: Training parameters and configurations
 - **Metric Logging**: Performance metrics and results
-- **Artifact Storage**: Visualizations and model artifacts
-- **Model Registry**: Automatic model registration (ML Engineer)
+- **Artifact Storage**: Model artifacts and training outputs
+- **Model Registry**: Automatic model registration in SageMaker Model Registry
+- **Authentication**: Automatic AWS authentication through SageMaker roles
+
+### MLflow Configuration
+
+The notebooks are configured to use the SageMaker managed MLflow tracking server:
+- **Tracking Server ARN**: `arn:aws:sagemaker:us-east-1:192771711075:mlflow-tracking-server/sagemaker-core-setup-mlflow-server`
+- **Authentication**: Handled automatically through IAM roles with `sagemaker-mlflow:*` permissions
+- **Fallback**: Local MLflow tracking if SageMaker managed server is unavailable
 
 ### Accessing MLFlow UI
 
 1. In SageMaker Studio, go to "Experiments and trials"
 2. Click on "MLflow" to access the tracking UI
 3. View experiments, runs, and artifacts
+4. Compare different training runs and model versions
 
 ## Support
 

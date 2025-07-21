@@ -79,7 +79,7 @@ graph TB
 - **Data Labeling**: Ground Truth integration for efficient dataset creation with automated YOLO format conversion
 - **Model Development**: YOLOv11 implementation for drone detection
 - **Pipeline Orchestration**: SageMaker Pipelines for automated workflows
-- **Experiment Tracking**: MLFlow integration for model versioning
+- **Experiment Tracking**: MLflow integration with SageMaker managed tracking server for model versioning
 - **Monitoring**: Model performance and data drift monitoring
 - **Governance**: IAM role-based access control for different team roles
 - **Cost Optimization**: Resource tagging, spot instances, and auto-scaling
@@ -157,8 +157,8 @@ This script will:
 - Create comprehensive user instructions for accessing notebooks
 
 The deployment includes:
-- **Data Scientist Notebooks**: `data-scientist-core-enhanced.ipynb` with MLFlow integration for data exploration and preparation
-- **ML Engineer Notebooks**: `ml-engineer-core-enhanced.ipynb` with MLFlow and Model Registry integration for pipeline management
+- **Data Scientist Notebooks**: `data-scientist-core-enhanced.ipynb` with MLflow integration for data exploration and preparation
+- **ML Engineer Notebooks**: `ml-engineer-core-enhanced.ipynb` with MLflow and Model Registry integration for pipeline management
 
 After running the deployment script, you'll get:
 - Generated deployment script: `scripts/setup/deploy_studio_notebooks.sh`
@@ -220,7 +220,7 @@ This script will:
 - Configure AWS CLI with the "ab" profile
 - Deploy IAM roles and policies with robust error handling
 - Deploy CDK stacks for endpoints and other resources with fallback options (like using default inline Lambda code)
-- Set up MLFlow on SageMaker
+- Set up MLflow on SageMaker with managed tracking server
 - Set up SageMaker Projects for CI/CD
 - Deploy a model to a SageMaker endpoint
 - Configure model monitoring and SageMaker Clarify

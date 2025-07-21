@@ -57,6 +57,21 @@ Resources:
                   - !Sub 'arn:aws:s3:::${DataBucketName}'
                   - !Sub 'arn:aws:s3:::${DataBucketName}/*'
               
+              # MLFlow tracking server access
+              - Effect: Allow
+                Action:
+                  - 'sagemaker:DescribeMlflowTrackingServer'
+                  - 'sagemaker:GetMlflowTrackingServerUrl'
+                  - 'sagemaker:ListMlflowTrackingServers'
+                  - 'sagemaker:CreatePresignedMlflowTrackingServerUrl'
+                Resource: '*'
+              
+              # MLFlow experiment tracking (sagemaker-mlflow actions for Data Scientists)
+              - Effect: Allow
+                Action:
+                  - 'sagemaker-mlflow:*'
+                Resource: '*'
+              
               # MLFlow experiment tracking (read/write for experiments)
               - Effect: Allow
                 Action:
@@ -65,8 +80,19 @@ Resources:
                   - 's3:DeleteObject'
                   - 's3:ListBucket'
                 Resource:
-                  - !Sub 'arn:aws:s3:::${ProjectName}-mlflow-artifacts'
-                  - !Sub 'arn:aws:s3:::${ProjectName}-mlflow-artifacts/*'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-artifacts'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-artifacts/*'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-sagemaker'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-sagemaker/*'
+              
+              # Ground Truth labeling job access
+              - Effect: Allow
+                Action:
+                  - 'sagemaker:CreateLabelingJob'
+                  - 'sagemaker:DescribeLabelingJob'
+                  - 'sagemaker:ListLabelingJobs'
+                  - 'sagemaker:StopLabelingJob'
+                Resource: '*'
               
               # CloudWatch Logs for notebook instances
               - Effect: Allow
@@ -155,6 +181,34 @@ Resources:
                   - !GetAtt SageMakerExecutionRole.Arn
                   - !GetAtt DataScientistRole.Arn
               
+              # MLFlow tracking server access
+              - Effect: Allow
+                Action:
+                  - 'sagemaker:DescribeMlflowTrackingServer'
+                  - 'sagemaker:GetMlflowTrackingServerUrl'
+                  - 'sagemaker:ListMlflowTrackingServers'
+                  - 'sagemaker:CreatePresignedMlflowTrackingServerUrl'
+                Resource: '*'
+              
+              # MLFlow experiment tracking (sagemaker-mlflow actions for ML Engineers)
+              - Effect: Allow
+                Action:
+                  - 'sagemaker-mlflow:*'
+                Resource: '*'
+              
+              # MLFlow experiment tracking and model registry (full access for ML Engineers)
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-artifacts'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-artifacts/*'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-sagemaker'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-sagemaker/*'
+              
               # Cost Explorer for cost monitoring
               - Effect: Allow
                 Action:
@@ -221,6 +275,50 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource: '*'
+              
+              # MLFlow tracking server permissions (needed for the tracking server itself)
+              - Effect: Allow
+                Action:
+                  - 'sagemaker:DescribeMlflowTrackingServer'
+                  - 'sagemaker:GetMlflowTrackingServerUrl'
+                  - 'sagemaker:ListMlflowTrackingServers'
+                  - 'sagemaker:CreateMlflowTrackingServer'
+                  - 'sagemaker:UpdateMlflowTrackingServer'
+                  - 'sagemaker:DeleteMlflowTrackingServer'
+                  - 'sagemaker:CreatePresignedMlflowTrackingServerUrl'
+                Resource: '*'
+              
+              # MLFlow experiment tracking (sagemaker-mlflow actions for tracking server)
+              - Effect: Allow
+                Action:
+                  - 'sagemaker-mlflow:*'
+                Resource: '*'
+              
+              # MLFlow experiment and run management (needed for user operations)
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-artifacts'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-artifacts/*'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-sagemaker'
+                  - !Sub 'arn:aws:s3:::${DataBucketName}/mlflow-sagemaker/*'
+              
+              # Cross-role validation for MLflow user access
+              - Effect: Allow
+                Action:
+                  - 'sts:AssumeRole'
+                  - 'sts:GetCallerIdentity'
+                  - 'iam:GetRole'
+                  - 'iam:ListRolePolicies'
+                  - 'iam:GetRolePolicy'
+                Resource:
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ProjectName}-DataScientist-Role'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ProjectName}-MLEngineer-Role'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ProjectName}-*'
       
       Tags:
         - Key: Project
