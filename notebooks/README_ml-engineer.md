@@ -24,7 +24,7 @@ When you run the enhanced notebook, you'll create and manage:
 ### 1. Training Infrastructure
 - **SageMaker Training Jobs**: YOLOv11 model training with spot instances
 - **MLflow Experiments**: Comprehensive experiment tracking
-- **Model Artifacts**: Stored in S3 with proper versioning
+- **Model Artifacts**: Managed through SageMaker Model Registry with S3 backend storage
 
 ### 2. Model Registry Assets
 - **Model Package Groups**: Organized model version collections
@@ -46,7 +46,42 @@ When you run the enhanced notebook, you'll create and manage:
 - **Statistical Analysis**: Trend analysis and hyperparameter correlation
 - **Automated Recommendations**: Data-driven model selection guidance
 
+## 🏛️ Model Registry Architecture
+
+### Proper Model Artifact Management
+
+The enhanced notebook follows AWS best practices for model artifact management:
+
+#### **Model Registry as Authoritative Catalog**
+- ✅ **Single Source of Truth**: Model Registry catalogs all model versions with metadata
+- ✅ **Governance**: Approval workflows, versioning, and lineage tracking
+- ✅ **Metadata Management**: Training job references, performance metrics, and tags
+- ✅ **Access Control**: Proper IAM-based access to model artifacts
+
+#### **S3 as Storage Backend**
+- ✅ **Automatic Management**: SageMaker automatically stores artifacts in S3
+- ✅ **Organized Structure**: `s3://lucaskle-ab3-project-pv/model-registry-artifacts/yolov11-models/`
+- ✅ **Proper References**: Model Registry maintains S3 URIs for artifact access
+- ✅ **Versioning**: Each model version has unique S3 location
+
+#### **Access Patterns**
+```python
+# ✅ CORRECT: Access through Model Registry
+artifact_info = get_model_artifacts_from_registry(model_package_arn)
+model_s3_uri = artifact_info['model_data_url']
+
+# ❌ INCORRECT: Direct S3 access bypasses governance
+# model_s3_uri = "s3://bucket/model-artifacts/model.tar.gz"
+```
+
+#### **Key Benefits**
+- **Traceability**: Complete lineage from training job to deployed model
+- **Governance**: Approval workflows prevent unauthorized deployments
+- **Versioning**: Proper model version management with rollback capabilities
+- **Metadata**: Rich metadata including performance metrics and training parameters
+
 ## 🔍 Where to Monitor Progress
+
 
 ### 1. SageMaker Console Monitoring
 
@@ -111,12 +146,18 @@ When you run the enhanced notebook, you'll create and manage:
 
 ### 4. S3 Storage Monitoring
 
-#### Model Artifacts
-- **Location**: `s3://lucaskle-ab3-project-pv/model-artifacts/`
+#### Model Artifacts (Managed through Model Registry)
+- **Primary Access**: SageMaker Model Registry (authoritative catalog)
+- **Storage Backend**: `s3://lucaskle-ab3-project-pv/model-registry-artifacts/yolov11-models/`
+- **Access Pattern**: Always through Model Registry APIs for proper governance
 - **Contents**: 
-  - Trained model files (`model.tar.gz`)
+  - Trained model files (`model.tar.gz`) - managed by SageMaker
   - Training outputs and logs
   - Model evaluation results
+- **Registry Benefits**: Versioning, metadata, approval workflows, lineage tracking
+- **Key Functions**:
+  - `get_model_artifacts_from_registry()` - Retrieve artifacts through registry
+  - `list_model_artifacts_in_registry()` - List all registry-managed models
 
 #### Dataset Access
 - **Location**: `s3://lucaskle-ab3-project-pv/datasets/`
@@ -213,15 +254,19 @@ When you run the enhanced notebook, you'll create and manage:
 **Symptoms**: "Error registering model" in notebook output
 **Solutions**:
 - Ensure training job completed successfully
-- Verify Model Registry permissions
-- Check inference container exists in ECR
+- Verify Model Registry permissions and package group exists
+- Check that model artifacts are accessible in S3
+- Verify inference container exists in ECR
+- Ensure proper IAM permissions for Model Registry operations
 
 #### 4. Deployment Failed
 **Symptoms**: Endpoint creation fails or shows "Failed" status
 **Solutions**:
 - Verify model is approved in Model Registry
-- Check inference container and model artifacts
-- Ensure sufficient service limits for endpoints
+- Check inference container and model artifacts are accessible through Model Registry
+- Ensure Model Registry has proper S3 artifact references
+- Verify sufficient service limits for endpoints
+- Check that model package has valid inference specification
 
 #### 5. No Performance Data
 **Symptoms**: Empty comparison tables or "No data available"
@@ -270,7 +315,10 @@ When you run the enhanced notebook, you'll create and manage:
 ### 2. Model Governance
 - Always review model validation results before approval
 - Document approval decisions in Model Registry
-- Maintain clear model versioning strategy
+- Use Model Registry as single source of truth for model artifacts
+- Access model artifacts through registry APIs, not direct S3 access
+- Maintain proper model versioning and lineage tracking
+- Implement proper approval workflows for production deployments
 
 ### 3. Performance Monitoring
 - Regularly run performance comparison analysis
